@@ -1,17 +1,17 @@
 <?php
 
+use App\Http\Controllers\v1\DocumentVerificationController;
 use App\Http\Controllers\v1\VerificationMismatchController;
 use Illuminate\Support\Facades\Route;
 
-Route::apiResource('verification-mismatches', VerificationMismatchController::class);
-
-Route::prefix('verification-mismatches/{verification_mismatch}')->group(function () {
-    Route::patch('resolve', [VerificationMismatchController::class, 'resolve'])
-        ->name('verification-mismatches.resolve');
-
-    Route::patch('waive', [VerificationMismatchController::class, 'waive'])
-        ->name('verification-mismatches.waive');
-
-    Route::patch('escalate', [VerificationMismatchController::class, 'escalate'])
-        ->name('verification-mismatches.escalate');
+// routes/v1/document-verification.php
+Route::prefix('document-verifications/{document_verification}')->group(function () {
+    Route::get('mismatches', [VerificationMismatchController::class, 'indexByVerification']);
+    Route::get('steps',      [DocumentVerificationController::class, 'steps']);
+    Route::patch('start',    [DocumentVerificationController::class, 'start'])->name('document-verifications.start');
+    Route::patch('complete', [DocumentVerificationController::class, 'complete'])->name('document-verifications.complete');
+    Route::patch('approve',  [DocumentVerificationController::class, 'approve'])->name('document-verifications.approve');
+    Route::patch('reject',   [DocumentVerificationController::class, 'reject'])->name('document-verifications.reject');
 });
+
+Route::apiResource('document-verifications', DocumentVerificationController::class);

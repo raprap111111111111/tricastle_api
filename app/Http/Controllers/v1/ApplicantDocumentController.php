@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\v1;
 
+use App\Domain\ApplicantDocument\Actions\ListDocumentBatchesAction;
 use App\Domain\ApplicantDocument\Actions\DeleteApplicantDocumentAction;
 use App\Domain\ApplicantDocument\Actions\GetApplicantDocumentAction;
 use App\Domain\ApplicantDocument\Actions\GetApplicantFolderAction;
@@ -30,15 +31,65 @@ use Illuminate\Http\Request;
 class ApplicantDocumentController extends Controller
 {
     public function __construct(
-        private readonly ListApplicantDocumentsAction  $listAction,
-        private readonly GetApplicantFolderAction      $getFolderAction,
-        private readonly GetApplicantDocumentAction    $getAction,
-        private readonly UploadApplicantDocumentAction $uploadAction,
-        private readonly UpdateApplicantDocumentAction $updateAction,
-        private readonly DeleteApplicantDocumentAction $deleteAction,
-        private readonly VerifyApplicantDocumentAction $verifyAction,
-        private readonly RejectApplicantDocumentAction $rejectAction,
+        private readonly ListApplicantDocumentsAction      $listAction,
+        private readonly ListDocumentBatchesAction         $listBatchesAction,
+        private readonly ListApplicantDocumentFoldersAction $listFoldersAction,
+        private readonly GetApplicantFolderAction          $getFolderAction,
+        private readonly GetApplicantDocumentAction        $getAction,
+        private readonly UploadApplicantDocumentAction     $uploadAction,
+        private readonly UpdateApplicantDocumentAction     $updateAction,
+        private readonly DeleteApplicantDocumentAction     $deleteAction,
+        private readonly VerifyApplicantDocumentAction     $verifyAction,
+        private readonly RejectApplicantDocumentAction     $rejectAction,
     ) {}
+
+    // =========================================================================
+    // Level 1 — Batches that contain documents
+    // GET /applicant-documents/batches
+    // =========================================================================
+    public function batches(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $data = $this->listBatchesAction->execute($validated);
+
+        return $this->responseSuccess($data, 'Batches retrieved successfully');
+    }
+
+    // =========================================================================
+    // Level 2 — Applicant folders inside a batch
+    // GET /applicant-documents/folders?batch_id=&search=&offset=&limit=
+    // =========================================================================
+    public function folders(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'batch_id' => ['nullable', 'integer', 'exists:batches,id'],
+            'search'   => ['nullable', 'string',  'max:100'],
+            'offset'   => ['nullable', 'integer', 'min:0'],
+            'limit'    => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $result = $this->listFoldersAction->execute($validated);
+
+        return $this->responseSuccess($result, 'Folders retrieved successfully');
+    }
+
+    // =========================================================================
+    // Level 3 — Single applicant document folder
+    // GET /applicant-documents/{applicantId}/folder
+    // =========================================================================
+    public function folder(int $applicantId): JsonResponse
+    {
+        $data = $this->getFolderAction->execute($applicantId);
+
+        return $this->responseSuccess($data, 'Folder retrieved successfully');
+    }
+
+    // =========================================================================
+    // Standard document CRUD
+    // =========================================================================
 
     /**
      * List all documents.
@@ -55,33 +106,13 @@ class ApplicantDocumentController extends Controller
     }
 
     /**
-     * List document folders (applicants who have documents).
-     * GET /applicant-documents/folders
-     */
-    public function folders(Request $request, ListApplicantDocumentFoldersAction $action): JsonResponse
-    {
-        $result = $action->execute($request->all());
-
-        return $this->responseSuccess($result, 'Folders retrieved successfully');
-    }
-
-    /**
-     * Get a single applicant's document folder.
-     * GET /applicant-documents/{applicantId}/folder
-     */
-    public function folder(int $applicantId): JsonResponse
-    {
-        $result = $this->getFolderAction->execute($applicantId);
-
-        return $this->responseSuccess($result, 'Folder retrieved successfully');
-    }
-
-    /**
      * Show a single document.
      * GET /applicant-documents/{applicantDocument}
      */
-    public function show(GetApplicantDocumentRequest $request, ApplicantDocument $applicantDocument): JsonResponse
-    {
+    public function show(
+        GetApplicantDocumentRequest $request,
+        ApplicantDocument           $applicantDocument
+    ): JsonResponse {
         $result = $this->getAction->execute($applicantDocument->id);
 
         return $this->responseSuccess(
@@ -140,8 +171,10 @@ class ApplicantDocumentController extends Controller
      * Update a document.
      * PUT /applicant-documents/{applicantDocument}
      */
-    public function update(UpdateApplicantDocumentRequest $request, ApplicantDocument $applicantDocument): JsonResponse
-    {
+    public function update(
+        UpdateApplicantDocumentRequest $request,
+        ApplicantDocument              $applicantDocument
+    ): JsonResponse {
         $updated = $this->updateAction->execute(
             $applicantDocument,
             ApplicantDocumentMapper::fromUpdateRequest($request)
@@ -157,8 +190,10 @@ class ApplicantDocumentController extends Controller
      * Delete a document.
      * DELETE /applicant-documents/{applicantDocument}
      */
-    public function destroy(DeleteApplicantDocumentRequest $request, ApplicantDocument $applicantDocument): JsonResponse
-    {
+    public function destroy(
+        DeleteApplicantDocumentRequest $request,
+        ApplicantDocument              $applicantDocument
+    ): JsonResponse {
         $this->deleteAction->execute($applicantDocument);
 
         return $this->responseSuccess(null, 'Document deleted successfully');
@@ -168,8 +203,10 @@ class ApplicantDocumentController extends Controller
      * Verify a document.
      * POST /applicant-documents/{applicantDocument}/verify
      */
-    public function verify(VerifyApplicantDocumentRequest $request, ApplicantDocument $applicantDocument): JsonResponse
-    {
+    public function verify(
+        VerifyApplicantDocumentRequest $request,
+        ApplicantDocument              $applicantDocument
+    ): JsonResponse {
         $verified = $this->verifyAction->execute(
             $applicantDocument,
             ApplicantDocumentMapper::fromVerifyRequest($request)
@@ -185,8 +222,10 @@ class ApplicantDocumentController extends Controller
      * Reject a document.
      * POST /applicant-documents/{applicantDocument}/reject
      */
-    public function reject(RejectApplicantDocumentRequest $request, ApplicantDocument $applicantDocument): JsonResponse
-    {
+    public function reject(
+        RejectApplicantDocumentRequest $request,
+        ApplicantDocument              $applicantDocument
+    ): JsonResponse {
         $rejected = $this->rejectAction->execute(
             $applicantDocument,
             ApplicantDocumentMapper::fromRejectRequest($request)

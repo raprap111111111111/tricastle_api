@@ -4,31 +4,37 @@
 use App\Http\Controllers\v1\ApplicantDocumentController;
 use Illuminate\Support\Facades\Route;
 
-// routes/api/v1/applicantDocument.php
-
 Route::prefix('applicant-documents')->group(function () {
 
-    Route::get('/', [ApplicantDocumentController::class, 'index']);
+    // ── Standard CRUD ──────────────────────────────────────────────────────
+    Route::get('/',  [ApplicantDocumentController::class, 'index']);
     Route::post('/', [ApplicantDocumentController::class, 'store']);
 
+    // ── Level 1 — Batches ─────────────────────────────────────────────────
+    Route::get('/batches', [ApplicantDocumentController::class, 'batches']);   // ← ADD THIS
+
+    // ── Level 2 — Applicant folder list ───────────────────────────────────
     Route::get('/folders', [ApplicantDocumentController::class, 'folders']);
 
+    // ── Level 3 — Single applicant folder ─────────────────────────────────
     Route::get('/{applicantId}/folder', [ApplicantDocumentController::class, 'folder'])
         ->whereNumber('applicantId');
 
-    Route::post('/{applicantDocument}/verify', [ApplicantDocumentController::class, 'verify'])
+    // ── Document actions ───────────────────────────────────────────────────
+    Route::post('/{applicantDocument}/verify',   [ApplicantDocumentController::class, 'verify'])
         ->whereNumber('applicantDocument');
 
-    Route::post('/{applicantDocument}/reject', [ApplicantDocumentController::class, 'reject'])
+    Route::post('/{applicantDocument}/reject',   [ApplicantDocumentController::class, 'reject'])
         ->whereNumber('applicantDocument');
 
     Route::post('/{applicantDocument}/versions', [ApplicantDocumentController::class, 'uploadVersion'])
         ->whereNumber('applicantDocument');
 
-    Route::get('/{applicantDocument}', [ApplicantDocumentController::class, 'show'])
+    // ── Single document CRUD (must be LAST — wildcard) ────────────────────
+    Route::get('/{applicantDocument}',    [ApplicantDocumentController::class, 'show'])
         ->whereNumber('applicantDocument');
 
-    Route::put('/{applicantDocument}', [ApplicantDocumentController::class, 'update'])
+    Route::put('/{applicantDocument}',    [ApplicantDocumentController::class, 'update'])
         ->whereNumber('applicantDocument');
 
     Route::delete('/{applicantDocument}', [ApplicantDocumentController::class, 'destroy'])
