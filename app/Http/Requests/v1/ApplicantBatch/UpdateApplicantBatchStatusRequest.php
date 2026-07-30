@@ -1,0 +1,24 @@
+<?php
+
+namespace App\Http\Requests\v1\ApplicantBatch;
+
+use App\Enums\ApplicantBatchStatus;
+use Illuminate\Foundation\Http\FormRequest;
+
+class UpdateApplicantBatchStatusRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return $this->user()->can(
+            'update',
+            $this->route('applicant_batch')
+        );
+    }
+
+    public function rules(): array
+    {
+        return [
+            'status' => ['required', 'in:' . implode(',', ApplicantBatchStatus::values())],
+        ];
+    }
+}

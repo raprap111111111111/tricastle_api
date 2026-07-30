@@ -1,0 +1,27 @@
+<?php
+
+namespace App\Http\Requests\v1\Batch;
+
+use App\Models\Batch;
+use Illuminate\Foundation\Http\FormRequest;
+
+class StoreBatchRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return $this->user()->can('create', Batch::class);
+    }
+
+    public function rules(): array
+    {
+        return [
+            'batch_number'    => ['required', 'integer', 'min:1', 'unique:batches,batch_number'],
+            'name'            => ['required', 'string', 'max:255'],
+            'country'         => ['nullable', 'string', 'max:100'],
+            'deployment_date' => ['nullable', 'date'],
+            'status'          => ['nullable', 'in:draft,ongoing,deployed,completed,cancelled'],
+            'is_active'       => ['nullable', 'boolean'],
+            'description'     => ['nullable', 'string', 'max:2000'],
+        ];
+    }
+}
