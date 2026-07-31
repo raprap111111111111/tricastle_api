@@ -10,8 +10,11 @@ Route::prefix('applicant-documents')->group(function () {
     Route::get('/',  [ApplicantDocumentController::class, 'index']);
     Route::post('/', [ApplicantDocumentController::class, 'store']);
 
+    // ── ✅ NEW: Expiring documents (derived alerts) ───────────────────────
+    Route::get('/expiring', [ApplicantDocumentController::class, 'expiring']);
+
     // ── Level 1 — Batches ─────────────────────────────────────────────────
-    Route::get('/batches', [ApplicantDocumentController::class, 'batches']);   // ← ADD THIS
+    Route::get('/batches', [ApplicantDocumentController::class, 'batches']);
 
     // ── Level 2 — Applicant folder list ───────────────────────────────────
     Route::get('/folders', [ApplicantDocumentController::class, 'folders']);
@@ -21,13 +24,23 @@ Route::prefix('applicant-documents')->group(function () {
         ->whereNumber('applicantId');
 
     // ── Document actions ───────────────────────────────────────────────────
-    Route::post('/{applicantDocument}/verify',   [ApplicantDocumentController::class, 'verify'])
+    Route::patch('/{applicantDocument}/status',   [ApplicantDocumentController::class, 'updateStatus'])
         ->whereNumber('applicantDocument');
 
-    Route::post('/{applicantDocument}/reject',   [ApplicantDocumentController::class, 'reject'])
+    Route::post('/{applicantDocument}/verify',    [ApplicantDocumentController::class, 'verify'])
         ->whereNumber('applicantDocument');
 
-    Route::post('/{applicantDocument}/versions', [ApplicantDocumentController::class, 'uploadVersion'])
+    Route::post('/{applicantDocument}/reject',    [ApplicantDocumentController::class, 'reject'])
+        ->whereNumber('applicantDocument');
+
+    Route::post('/{applicantDocument}/versions',  [ApplicantDocumentController::class, 'uploadVersion'])
+        ->whereNumber('applicantDocument');
+
+    // ── File streaming ─────────────────────────────────────────────────────
+    Route::get('/{applicantDocument}/preview',    [ApplicantDocumentController::class, 'preview'])
+        ->whereNumber('applicantDocument');
+
+    Route::get('/{applicantDocument}/download',   [ApplicantDocumentController::class, 'download'])
         ->whereNumber('applicantDocument');
 
     // ── Single document CRUD (must be LAST — wildcard) ────────────────────

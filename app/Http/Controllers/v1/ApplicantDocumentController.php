@@ -2,14 +2,15 @@
 
 namespace App\Http\Controllers\v1;
 
-use App\Domain\ApplicantDocument\Actions\ListDocumentBatchesAction;
 use App\Domain\ApplicantDocument\Actions\DeleteApplicantDocumentAction;
 use App\Domain\ApplicantDocument\Actions\GetApplicantDocumentAction;
 use App\Domain\ApplicantDocument\Actions\GetApplicantFolderAction;
 use App\Domain\ApplicantDocument\Actions\ListApplicantDocumentFoldersAction;
 use App\Domain\ApplicantDocument\Actions\ListApplicantDocumentsAction;
+use App\Domain\ApplicantDocument\Actions\ListDocumentBatchesAction;
 use App\Domain\ApplicantDocument\Actions\RejectApplicantDocumentAction;
 use App\Domain\ApplicantDocument\Actions\UpdateApplicantDocumentAction;
+use App\Domain\ApplicantDocument\Actions\UpdateApplicantDocumentStatusAction;
 use App\Domain\ApplicantDocument\Actions\UploadApplicantDocumentAction;
 use App\Domain\ApplicantDocument\Actions\VerifyApplicantDocumentAction;
 use App\Domain\ApplicantDocument\DTOs\UploadApplicantDocumentDTO;
@@ -20,6 +21,7 @@ use App\Http\Requests\v1\ApplicantDocument\GetAllApplicantDocumentRequest;
 use App\Http\Requests\v1\ApplicantDocument\GetApplicantDocumentRequest;
 use App\Http\Requests\v1\ApplicantDocument\RejectApplicantDocumentRequest;
 use App\Http\Requests\v1\ApplicantDocument\UpdateApplicantDocumentRequest;
+use App\Http\Requests\v1\ApplicantDocument\UpdateApplicantDocumentStatusRequest;
 use App\Http\Requests\v1\ApplicantDocument\UploadApplicantDocumentRequest;
 use App\Http\Requests\v1\ApplicantDocument\UploadNewVersionRequest;
 use App\Http\Requests\v1\ApplicantDocument\VerifyApplicantDocumentRequest;
@@ -27,6 +29,12 @@ use App\Http\Resources\v1\ApplicantDocumentResource;
 use App\Models\ApplicantDocument;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use App\Domain\ApplicantDocument\Actions\GetExpiringDocumentsAction;
+use App\Http\Requests\v1\ApplicantDocument\GetExpiringDocumentsRequest;
+
 
 class ApplicantDocumentController extends Controller
 {
@@ -41,6 +49,8 @@ class ApplicantDocumentController extends Controller
         private readonly DeleteApplicantDocumentAction     $deleteAction,
         private readonly VerifyApplicantDocumentAction     $verifyAction,
         private readonly RejectApplicantDocumentAction     $rejectAction,
+        private readonly UpdateApplicantDocumentStatusAction     $updateStatusAction,
+        private readonly GetExpiringDocumentsAction $getExpiringDocumentsAction,
     ) {}
 
     // =========================================================================
@@ -147,15 +157,15 @@ class ApplicantDocumentController extends Controller
         ApplicantDocument       $applicantDocument
     ): JsonResponse {
         $dto = new UploadApplicantDocumentDTO(
-            applicantId:    $applicantDocument->applicant_id,
+            applicantId: $applicantDocument->applicant_id,
             documentTypeId: $applicantDocument->document_type_id,
-            file:           $request->file('file'),
-            documentDate:   $request->input('document_date', $applicantDocument->document_date),
-            expiryDate:     $request->input('expiry_date',   $applicantDocument->expiry_date),
-            priority:       $request->input('priority',      $applicantDocument->priority ?? 'normal'),
-            notes:          $request->input('notes',         $applicantDocument->notes),
-            metadata:       $applicantDocument->metadata,
-            uploadedBy:     auth()->id(),
+            file: $request->file('file'),
+            documentDate: $request->input('document_date', $applicantDocument->document_date),
+            expiryDate: $request->input('expiry_date',   $applicantDocument->expiry_date),
+            priority: $request->input('priority',      $applicantDocument->priority ?? 'normal'),
+            notes: $request->input('notes',         $applicantDocument->notes),
+            metadata: $applicantDocument->metadata,
+            uploadedBy: auth()->id(),
         );
 
         $newVersion = $this->uploadAction->execute($dto);
@@ -234,6 +244,111 @@ class ApplicantDocumentController extends Controller
         return $this->responseSuccess(
             new ApplicantDocumentResource($rejected),
             'Document rejected successfully'
+        );
+    }
+
+    /**
+     * Update the status of a document.
+     * PATCH /applicant-documents/{applicantDocument}/status
+     */
+    public function updateStatus(
+        UpdateApplicantDocumentStatusRequest $request,
+        ApplicantDocument $applicantDocument
+    ): JsonResponse {
+        $updated = $this->updateStatusAction->execute(
+            $applicantDocument,
+            $request->validated(),
+            $request->user()->id,
+        );
+
+        return $this->responseSuccess(
+            new ApplicantDocumentResource($updated),
+            'Document status updated successfully'
+        );
+    }
+
+
+    /**
+     * Stream file inline for preview (images, PDFs, videos).
+     * GET /applicant-documents/{applicantDocument}/preview
+     */
+    public function preview(ApplicantDocument $applicantDocument): BinaryFileResponse
+    {
+        $disk = $this->resolveDisk($applicantDocument);
+
+        if (!$disk) {
+            abort(404, 'File not found on server.');
+        }
+
+        return response()->file(
+            $disk->path($applicantDocument->file_path),
+            [
+                'Content-Type'        => $applicantDocument->mime_type ?? 'application/octet-stream',
+                'Content-Disposition' => 'inline; filename="' . addslashes($applicantDocument->file_name) . '"',
+                'Cache-Control'       => 'private, max-age=0, must-revalidate',
+            ],
+        );
+    }
+
+    /**
+     * Download file as attachment.
+     * GET /applicant-documents/{applicantDocument}/download
+     */
+    public function download(ApplicantDocument $applicantDocument): StreamedResponse
+    {
+        $disk = $this->resolveDisk($applicantDocument);
+
+        if (!$disk) {
+            abort(404, 'File not found on server.');
+        }
+
+        return $disk->download(
+            $applicantDocument->file_path,
+            $applicantDocument->file_name,
+            [
+                'Content-Type' => $applicantDocument->mime_type ?? 'application/octet-stream',
+            ],
+        );
+    }
+
+    /**
+     * Try known disks until we find the file.
+     * Returns the Filesystem instance that has the file, or null.
+     */
+    private function resolveDisk(ApplicantDocument $doc)
+    {
+        if (empty($doc->file_path)) {
+            return null;
+        }
+
+        // Order: try public first (most common for uploads), then local, then S3
+        $candidates = ['public', 'local', 's3'];
+
+        foreach ($candidates as $name) {
+            try {
+                $disk = Storage::disk($name);
+                if ($disk->exists($doc->file_path)) {
+                    return $disk;
+                }
+            } catch (\Throwable $e) {
+                // disk not configured, skip
+                continue;
+            }
+        }
+
+        return null;
+    }
+    /**
+     * GET /applicant-documents/expiring
+     * Returns documents expiring within 90 days or already expired.
+     */
+    public function expiring(GetExpiringDocumentsRequest $request): JsonResponse
+    {
+        $result = $this->getExpiringDocumentsAction->execute($request->validated());
+
+        return $this->responseSuccess(
+            $result,
+            'Expiring documents retrieved successfully'
         );
     }
 }
