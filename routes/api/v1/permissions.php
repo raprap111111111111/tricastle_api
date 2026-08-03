@@ -1,4 +1,5 @@
 <?php
+// routes/api/v1/permissions.php
 
 use App\Http\Controllers\v1\PermissionController;
 use Illuminate\Support\Facades\Route;
@@ -8,23 +9,17 @@ use Illuminate\Support\Facades\Route;
 | Permission Routes
 |--------------------------------------------------------------------------
 | Prefix: /api/v1/permissions
-| Middleware: auth:api (inherited from parent)
+| Middleware: auth:api (from parent)
+| Authorization: Handled by FormRequests + PermissionPolicy
 */
 
 Route::prefix('permissions')->name('permissions.')->group(function () {
-    
-    // 📋 List all permissions (with optional filters)
-    Route::get('/', [PermissionController::class, 'index'])
-        ->middleware('permission:view_permissions')
-        ->name('index');
-    
-    // 📊 Get permissions grouped by module
-    Route::get('/grouped', [PermissionController::class, 'grouped'])
-        ->middleware('permission:view_permissions')
-        ->name('grouped');
-    
-    // 👁️ Get single permission
-    Route::get('/{permission}', [PermissionController::class, 'show'])
-        ->middleware('permission:view_permissions')
-        ->name('show');
+
+    Route::get('/',                   [PermissionController::class, 'index'])->name('index');
+    Route::get('/grouped',            [PermissionController::class, 'grouped'])->name('grouped');
+    Route::post('/',                  [PermissionController::class, 'store'])->name('store');
+    Route::get('/{permission}',       [PermissionController::class, 'show'])->name('show');
+    Route::put('/{permission}',       [PermissionController::class, 'update'])->name('update');
+    Route::delete('/{permission}',    [PermissionController::class, 'destroy'])->name('destroy');
+
 });

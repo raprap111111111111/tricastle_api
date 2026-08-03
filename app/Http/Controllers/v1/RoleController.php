@@ -1,164 +1,138 @@
 <?php
+// app/Http/Controllers/v1/RoleController.php
 
 namespace App\Http\Controllers\v1;
 
+use App\Domain\Role\Actions\CreateRoleAction;
+use App\Domain\Role\Actions\DeleteRoleAction;
+use App\Domain\Role\Actions\GetRoleAction;
+use App\Domain\Role\Actions\GetRolePermissionsAction;
+use App\Domain\Role\Actions\ListRolesAction;
+use App\Domain\Role\Actions\SyncRolePermissionsAction;
+use App\Domain\Role\Actions\UpdateRoleAction;
+use App\Domain\Role\Mappers\RoleMapper;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\v1\Role\DeleteRoleRequest;
+use App\Http\Requests\v1\Role\GetAllRolesRequest;
+use App\Http\Requests\v1\Role\GetRoleRequest;
+use App\Http\Requests\v1\Role\StoreRoleRequest;
+use App\Http\Requests\v1\Role\SyncPermissionsRequest;
+use App\Http\Requests\v1\Role\UpdateRoleRequest;
+use App\Http\Resources\v1\RolePermissionResource;
+use App\Http\Resources\v1\RoleResource;
+use App\Models\Role;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
-use Spatie\Permission\Models\Role;
 
 class RoleController extends Controller
 {
-    /**
-     * List all roles with permission counts
-     */
-    public function index(): JsonResponse
-    {
-        $roles = Role::withCount(['permissions', 'users'])
-            ->orderBy('name')
-            ->get();
+    public function __construct(
+        private readonly ListRolesAction           $listAction,
+        private readonly GetRoleAction             $getAction,
+        private readonly CreateRoleAction          $createAction,
+        private readonly UpdateRoleAction          $updateAction,
+        private readonly DeleteRoleAction          $deleteAction,
+        private readonly SyncRolePermissionsAction $syncAction,
+        private readonly GetRolePermissionsAction  $getPermissionsAction,
+    ) {}
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Roles retrieved successfully',
-            'data' => $roles,
-        ]);
+    /**
+     * 📋 GET /roles
+     */
+    public function index(GetAllRolesRequest $request): JsonResponse
+    {
+        $roles = $this->listAction->execute();
+
+        return $this->responseSuccess(
+            RoleResource::collection($roles),
+            'Roles retrieved successfully'
+        );
     }
 
     /**
-     * Create new role
+     * 👁️ GET /roles/{role}
      */
-    public function store(Request $request): JsonResponse
+    public function show(GetRoleRequest $request, Role $role): JsonResponse
     {
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255', 'unique:roles,name'],
-            'description' => ['nullable', 'string', 'max:255'],
-            'permissions' => ['nullable', 'array'],
-            'permissions.*' => ['string', 'exists:permissions,name'],
-        ]);
+        $role = $this->getAction->execute($role->id);
 
-        $role = Role::create([
-            'name' => $validated['name'],
-            'guard_name' => 'api',
-            'description' => $validated['description'] ?? null,
-        ]);
-
-        if (!empty($validated['permissions'])) {
-            $role->syncPermissions($validated['permissions']);
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Role created successfully',
-            'data' => $role->load('permissions'),
-        ], 201);
+        return $this->responseSuccess(
+            new RoleResource($role),
+            'Role retrieved successfully'
+        );
     }
 
     /**
-     * Show single role with its permissions
+     * ➕ POST /roles
      */
-    public function show(Role $role): JsonResponse
+    public function store(StoreRoleRequest $request): JsonResponse
     {
-        $role->load('permissions');
-        $role->loadCount('users');
+        $role = $this->createAction->execute(
+            RoleMapper::fromCreateRequest($request)
+        );
 
-        return response()->json([
-            'success' => true,
-            'data' => $role,
-        ]);
+        return $this->responseSuccess(
+            new RoleResource($role),
+            'Role created successfully',
+            JsonResponse::HTTP_CREATED
+        );
     }
 
     /**
-     * Update role
+     * ✏️ PUT /roles/{role}
      */
-    public function update(Request $request, Role $role): JsonResponse
+    public function update(UpdateRoleRequest $request, Role $role): JsonResponse
     {
-        // Prevent editing system roles
-        if ($role->is_system ?? false) {
-            return response()->json([
-                'success' => false,
-                'message' => 'System roles cannot be modified.',
-            ], 403);
-        }
+        $updated = $this->updateAction->execute(
+            $role,
+            RoleMapper::fromUpdateRequest($request)
+        );
 
-        $validated = $request->validate([
-            'name' => ['sometimes', 'string', 'max:255', Rule::unique('roles')->ignore($role->id)],
-            'description' => ['nullable', 'string', 'max:255'],
-        ]);
-
-        $role->update($validated);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Role updated successfully',
-            'data' => $role->fresh(),
-        ]);
+        return $this->responseSuccess(
+            new RoleResource($updated),
+            'Role updated successfully'
+        );
     }
 
     /**
-     * Delete role
+     * 🗑️ DELETE /roles/{role}
      */
-    public function destroy(Role $role): JsonResponse
+    public function destroy(DeleteRoleRequest $request, Role $role): JsonResponse
     {
-        // Prevent deleting system roles
-        if ($role->is_system ?? false) {
-            return response()->json([
-                'success' => false,
-                'message' => 'System roles cannot be deleted.',
-            ], 403);
-        }
+        $this->deleteAction->execute($role);
 
-        // Prevent deleting roles that have users assigned
-        if ($role->users()->count() > 0) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cannot delete role. Users are still assigned to this role.',
-                'meta' => [
-                    'users_count' => $role->users()->count(),
-                ],
-            ], 422);
-        }
-
-        $role->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Role deleted successfully',
-        ]);
+        return $this->responseSuccess(null, 'Role deleted successfully');
     }
 
     /**
-     * Sync permissions for a role (replaces all existing permissions)
+     * 🔗 PUT /roles/{role}/permissions
      */
-    public function syncPermissions(Request $request, Role $role): JsonResponse
+    public function syncPermissions(SyncPermissionsRequest $request, Role $role): JsonResponse
     {
-        $validated = $request->validate([
-            'permissions' => ['required', 'array'],
-            'permissions.*' => ['string', 'exists:permissions,name'],
-        ]);
+        $updated = $this->syncAction->execute(
+            $role,
+            RoleMapper::fromSyncRequest($request)
+        );
 
-        $role->syncPermissions($validated['permissions']);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Permissions synced successfully',
-            'data' => $role->load('permissions'),
-        ]);
+        return $this->responseSuccess(
+            new RoleResource($updated),
+            'Permissions synced successfully'
+        );
     }
 
     /**
-     * Get all permissions assigned to a role
+     * 📋 GET /roles/{role}/permissions
      */
     public function getPermissions(Role $role): JsonResponse
     {
-        return response()->json([
-            'success' => true,
-            'data' => $role->permissions,
-            'meta' => [
-                'role' => $role->name,
-                'total' => $role->permissions->count(),
+        $permissions = $this->getPermissionsAction->execute($role);
+
+        return $this->responseSuccess(
+            [
+                'role'        => $role->name,
+                'total'       => $permissions->count(),
+                'permissions' => RolePermissionResource::collection($permissions),
             ],
-        ]);
+            'Role permissions retrieved successfully'
+        );
     }
 }
