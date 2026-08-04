@@ -3,7 +3,7 @@
 namespace App\Domain\ActivityLog\Actions;
 
 use App\Domain\ActivityLog\Repositories\ActivityLogRepository;
-use App\Models\ActivityLog;
+use Spatie\Activitylog\Models\Activity;
 
 class GetActivityLogAction
 {
@@ -11,8 +11,8 @@ class GetActivityLogAction
         private readonly ActivityLogRepository $repository
     ) {}
 
-    public function execute(int $id): ActivityLog
+    public function execute(int $id): ?Activity
     {
-        return $this->repository->findOrFail($id);
+        return $this->repository->find($id, ['causer', 'subject']);
     }
 }

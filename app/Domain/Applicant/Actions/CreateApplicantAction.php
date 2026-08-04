@@ -2,6 +2,7 @@
 
 namespace App\Domain\Applicant\Actions;
 
+use App\Domain\ActivityLog\Traits\LogsActivity;
 use App\Domain\Applicant\DTOs\CreateApplicantDTO;
 use App\Domain\Applicant\Repositories\ApplicantRepository;
 use App\Domain\Applicant\Services\DuplicateDetectionService;
@@ -12,6 +13,7 @@ use Illuminate\Support\Facades\Log;
 
 class CreateApplicantAction
 {
+    use LogsActivity;
     public function __construct(
         private readonly ApplicantRepository       $repository,
         private readonly DuplicateDetectionService $duplicateService,

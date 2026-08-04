@@ -2,37 +2,37 @@
 
 namespace App\Domain\ActivityLog\Repositories;
 
-use App\Models\ActivityLog;
 use App\Support\Query\BaseRepository;
 use Illuminate\Database\Eloquent\Builder;
+use Spatie\Activitylog\Models\Activity;
 
 class ActivityLogRepository extends BaseRepository
 {
-    protected string $model = ActivityLog::class;
+    protected string $model = Activity::class;
 
-    protected array $relations = ['user'];
+    protected array $relations = ['causer', 'subject'];
 
     protected array $searchable = [
-        'action',
-        'module',
+        'event',
+        'log_name',
         'description',
         'subject_type',
-        'ip_address',
     ];
 
     protected array $filterable = [
-        'user_id',
-        'action',
-        'module',
+        'causer_id',
+        'event',
+        'log_name',
         'subject_type',
-        'method',
+        'subject_id',
     ];
 
     protected array $sortable = [
         'id',
-        'action',
-        'module',
+        'event',
+        'log_name',
         'subject_type',
+        'causer_id',
         'created_at',
     ];
 
@@ -44,6 +44,7 @@ class ActivityLogRepository extends BaseRepository
         $query   = parent::query();
         $request = request();
 
+        // ── Date filters ─────────────────────────────
         if ($request->filled('date_from')) {
             $query->whereDate('created_at', '>=', $request->input('date_from'));
         }
@@ -52,31 +53,34 @@ class ActivityLogRepository extends BaseRepository
             $query->whereDate('created_at', '<=', $request->input('date_to'));
         }
 
+        // ── Quick date shortcuts ─────────────────────
         if ($request->boolean('today')) {
-            $query->today();
+            $query->whereDate('created_at', now()->toDateString());
         }
 
         if ($request->boolean('this_week')) {
-            $query->thisWeek();
+            $query->whereBetween('created_at', [
+                now()->startOfWeek(),
+                now()->endOfWeek(),
+            ]);
         }
 
         if ($request->boolean('this_month')) {
-            $query->thisMonth();
+            $query->whereBetween('created_at', [
+                now()->startOfMonth(),
+                now()->endOfMonth(),
+            ]);
         }
 
         if ($request->filled('recent_days')) {
-            $query->recent((int) $request->input('recent_days'));
+            $query->where('created_at', '>=', now()->subDays((int) $request->input('recent_days')));
         }
 
-        if ($request->filled('subject_id')) {
-            $query->where('subject_id', $request->input('subject_id'));
+        // ── HTTP Method filter (stored in properties) ─
+        if ($request->filled('method')) {
+            $query->where('properties->method', $request->input('method'));
         }
 
         return $query;
-    }
-
-    public function log(array $data): ActivityLog
-    {
-        return ActivityLog::create($data);
     }
 }

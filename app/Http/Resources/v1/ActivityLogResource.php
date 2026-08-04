@@ -9,33 +9,37 @@ class ActivityLogResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $properties = is_array($this->properties)
+            ? $this->properties
+            : ($this->properties?->toArray() ?? []);
+
         return [
             'id'           => $this->id,
-            'user_id'      => $this->user_id,
-            'action'       => $this->action,
-            'module'       => $this->module,
+            'user_id'      => $this->causer_id,
+            'user'         => $this->whenLoaded('causer', fn () => $this->causer ? [
+                'id'        => $this->causer->id,
+                'full_name' => $this->causer->full_name ?? $this->causer->name,
+                'name'      => $this->causer->full_name ?? $this->causer->name,
+                'email'     => $this->causer->email,
+            ] : null),
+
+            'action'       => $this->event ?? 'action',
+            'module'       => $this->log_name ?? 'general',
             'subject_type' => $this->subject_type,
             'subject_id'   => $this->subject_id,
             'description'  => $this->description,
-            'old_values'   => $this->old_values,
-            'new_values'   => $this->new_values,
-            'metadata'     => $this->metadata,
-            'ip_address'   => $this->ip_address,
-            'user_agent'   => $this->user_agent,
-            'url'          => $this->url,
-            'method'       => $this->method,
-            'has_changes'  => $this->hasChanges(),
-            'changed_fields' => $this->getChangedFields(),
 
-            // Relations
-            'user'         => $this->whenLoaded('user', fn () => [
-                'id'    => $this->user->id,
-                'name'  => $this->user->name,
-                'email' => $this->user->email,
-            ]),
+            'old_values'   => $properties['old']        ?? null,
+            'new_values'   => $properties['attributes'] ?? null,
+            'metadata'     => $properties['metadata']   ?? null,
 
-            'created_at'   => $this->created_at?->toDateTimeString(),
-            'updated_at'   => $this->updated_at?->toDateTimeString(),
+            'ip_address'   => $properties['ip']         ?? null,
+            'user_agent'   => $properties['user_agent'] ?? null,
+            'url'          => $properties['url']        ?? null,
+            'method'       => $properties['method']     ?? null,
+
+            'created_at'   => $this->created_at?->toIso8601String(),
+            'updated_at'   => $this->updated_at?->toIso8601String(),
         ];
     }
 }

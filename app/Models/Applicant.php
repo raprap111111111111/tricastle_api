@@ -11,15 +11,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
+use Spatie\Activitylog\Support\LogOptions;
 
 class Applicant extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, SoftDeletes, LogsActivity;
 
     protected $fillable = [
         'applicant_code',
-
-        // ─── Personal ────────────────────────────────
         'first_name',
         'middle_name',
         'last_name',
@@ -32,39 +32,27 @@ class Applicant extends Model
         'civil_status',
         'number_of_children',
         'nationality',
-
-        // ─── Physical ────────────────────────────────
         'height_cm',
         'weight_kg',
         'dominant_hand',
         'blood_type',
-
-        // ─── Address ─────────────────────────────────
         'current_address',
         'permanent_address',
         'city',
         'province',
         'postal_code',
-
-        // ─── Passport / IDs ──────────────────────────
         'passport_number',
         'passport_expiry',
         'sss_number',
         'tin_number',
         'philhealth_number',
         'pagibig_number',
-
-        // ─── Status ──────────────────────────────────
         'status',
         'rejection_reason',
         'final_listed_at',
         'rejected_at',
-
-        // ─── Quality ─────────────────────────────────
         'quality_score',
         'quality_grade',
-
-        // ─── Staff ───────────────────────────────────
         'assigned_staff_id',
         'reviewed_by',
         'created_by',
@@ -94,7 +82,56 @@ class Applicant extends Model
     protected $appends = ['full_name', 'age'];
 
     // ═══════════════════════════════════════════════════════
-    // Boot — Auto-generate applicant_code (collision-safe)
+    // 🎯 Spatie Activity Log
+    // ═══════════════════════════════════════════════════════
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnly([
+                'first_name',
+                'middle_name',
+                'last_name',
+                'suffix',
+                'email',
+                'phone',
+                'mobile',
+                'status',
+                'quality_score',
+                'quality_grade',
+                'assigned_staff_id',
+                'rejection_reason',
+                'final_listed_at',
+                'rejected_at',
+            ])
+            ->logOnlyDirty()
+            ->dontLogEmptyChanges()
+            ->useLogName('Applicant')
+            ->setDescriptionForEvent(function (string $event) {
+                $code = $this->applicant_code ?? 'unknown';
+                $name = trim("{$this->first_name} {$this->last_name}");
+
+                if ($event === 'updated' && $this->isDirty('status')) {
+                    $newStatus = $this->status?->value ?? $this->status;
+
+                    return match ($newStatus) {
+                        'final_list' => "Moved {$code} ({$name}) to Final List",
+                        'rejected'   => "Rejected {$code} ({$name})",
+                        'verified'   => "Verified {$code} ({$name})",
+                        default      => "Changed {$code} status to {$newStatus}",
+                    };
+                }
+
+                return match ($event) {
+                    'created' => "Created applicant {$code} ({$name})",
+                    'updated' => "Updated applicant {$code}",
+                    'deleted' => "Deleted applicant {$code}",
+                    default   => "Applicant {$code} was {$event}",
+                };
+            });
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // Boot — Auto-generate applicant_code
     // ═══════════════════════════════════════════════════════
     protected static function booted(): void
     {
@@ -103,7 +140,6 @@ class Applicant extends Model
                 $applicant->applicant_code = static::generateUniqueCode();
             }
 
-            // Always starts as pending
             $applicant->status ??= ApplicantStatus::Pending;
         });
     }
@@ -140,7 +176,7 @@ class Applicant extends Model
     protected function fullName(): Attribute
     {
         return Attribute::make(
-            get: fn () => trim(implode(' ', array_filter([
+            get: fn() => trim(implode(' ', array_filter([
                 $this->first_name,
                 $this->middle_name,
                 $this->last_name,
@@ -152,7 +188,7 @@ class Applicant extends Model
     protected function age(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->date_of_birth?->age,
+            get: fn() => $this->date_of_birth?->age,
         );
     }
 
@@ -211,14 +247,11 @@ class Applicant extends Model
             ->where('is_current_version', true);
     }
 
-    // ─── Batch Relationships ─────────────────────────────
-    // Direct model relationship (preferred — full ApplicantBatch model)
     public function applicantBatches(): HasMany
     {
         return $this->hasMany(ApplicantBatch::class);
     }
 
-    // Many-to-many shortcut (use only for quick batch queries)
     public function batches(): BelongsToMany
     {
         return $this->belongsToMany(Batch::class, 'applicant_batches')

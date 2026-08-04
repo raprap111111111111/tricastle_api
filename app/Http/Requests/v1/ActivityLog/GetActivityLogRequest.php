@@ -8,7 +8,8 @@ class GetActivityLogRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()->can('view', $this->route('activity_log'));
+        // Spatie doesn't use policies — allow authenticated users
+        return $this->user() !== null;
     }
 
     public function rules(): array

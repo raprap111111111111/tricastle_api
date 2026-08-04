@@ -8,8 +8,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\v1\ActivityLog\GetActivityLogRequest;
 use App\Http\Requests\v1\ActivityLog\GetAllActivityLogRequest;
 use App\Http\Resources\v1\ActivityLogResource;
-use App\Models\ActivityLog;
 use Illuminate\Http\JsonResponse;
+use Spatie\Activitylog\Models\Activity;
 
 class ActivityLogController extends Controller
 {
@@ -28,7 +28,7 @@ class ActivityLogController extends Controller
         return $this->responseSuccess($result, 'Activity logs retrieved successfully');
     }
 
-    public function show(GetActivityLogRequest $request, ActivityLog $activityLog): JsonResponse
+    public function show(GetActivityLogRequest $request, Activity $activityLog): JsonResponse
     {
         $result = $this->getAction->execute($activityLog->id);
 

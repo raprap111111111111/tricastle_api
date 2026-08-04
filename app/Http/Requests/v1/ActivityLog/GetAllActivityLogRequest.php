@@ -2,8 +2,8 @@
 
 namespace App\Http\Requests\v1\ActivityLog;
 
-use App\Models\ActivityLog;
 use Illuminate\Foundation\Http\FormRequest;
+use Spatie\Activitylog\Models\Activity;
 
 class GetAllActivityLogRequest extends FormRequest
 {
@@ -14,15 +14,21 @@ class GetAllActivityLogRequest extends FormRequest
 
     public function authorize(): bool
     {
-        return $this->user()->can('viewAny', ActivityLog::class);
+        return $this->user()->can('viewAny', Activity::class);
     }
 
     protected function prepareForValidation(): void
     {
+        // Map frontend-friendly names → Spatie column names
         $this->merge([
             'order_by'  => $this->getValidOrderBy(),
             'order_dir' => $this->getValidOrderDir(),
             'limit'     => $this->getValidLimit(),
+
+            // 🔑 Map user-friendly filter names to Spatie's internal names
+            'causer_id'    => $this->input('user_id'),
+            'event'        => $this->input('action'),
+            'log_name'     => $this->input('module'),
         ]);
     }
 
@@ -35,7 +41,7 @@ class GetAllActivityLogRequest extends FormRequest
             'order_by'     => ['nullable', 'in:' . implode(',', $this->getValidColumns())],
             'order_dir'    => ['nullable', 'in:asc,desc'],
 
-            // Filters
+            // ─── Original filter names (for API compatibility) ────
             'user_id'      => ['nullable', 'integer', 'exists:users,id'],
             'action'       => ['nullable', 'string', 'max:100'],
             'module'       => ['nullable', 'string', 'max:100'],
@@ -43,12 +49,17 @@ class GetAllActivityLogRequest extends FormRequest
             'subject_id'   => ['nullable', 'integer'],
             'method'       => ['nullable', 'in:GET,POST,PUT,PATCH,DELETE'],
 
-            // Date filters
+            // ─── Mapped Spatie names (internal use) ───────────────
+            'causer_id'    => ['nullable', 'integer', 'exists:users,id'],
+            'event'        => ['nullable', 'string', 'max:100'],
+            'log_name'     => ['nullable', 'string', 'max:100'],
+
+            // ─── Date filters ─────────────────────────────────────
             'date_from'    => ['nullable', 'date'],
             'date_to'      => ['nullable', 'date', 'after_or_equal:date_from'],
             'recent_days'  => ['nullable', 'integer', 'min:1', 'max:365'],
 
-            // Special filters
+            // ─── Special filters ──────────────────────────────────
             'today'        => ['nullable', 'boolean'],
             'this_week'    => ['nullable', 'boolean'],
             'this_month'   => ['nullable', 'boolean'],
@@ -76,11 +87,13 @@ class GetAllActivityLogRequest extends FormRequest
 
     protected function getValidColumns(): array
     {
+        // Spatie's actual columns
         return [
             'id',
-            'action',
-            'module',
+            'event',
+            'log_name',
             'subject_type',
+            'causer_id',
             'created_at',
         ];
     }
