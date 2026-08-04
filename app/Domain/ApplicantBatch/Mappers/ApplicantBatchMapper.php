@@ -1,7 +1,5 @@
 <?php
 
-// app/Domain/ApplicantBatch/Mappers/ApplicantBatchMapper.php
-
 namespace App\Domain\ApplicantBatch\Mappers;
 
 use App\Domain\ApplicantBatch\DTOs\CreateApplicantBatchDTO;
@@ -24,8 +22,6 @@ class ApplicantBatchMapper
         return new CreateApplicantBatchDTO(
             applicantId: (int) $request->validated('applicant_id'),
             batchId:     (int) $request->validated('batch_id'),
-            status:      $request->validated('status', 'applied'),
-            appliedAt:   $request->validated('applied_at'),
             processedBy: $request->user()?->id,
         );
     }

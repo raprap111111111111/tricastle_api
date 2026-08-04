@@ -17,9 +17,11 @@ return new class extends Migration
                   ->constrained('batches')
                   ->cascadeOnDelete();
 
+            // ─── Batch-specific Status ───────────────
+            // This is the applicant's journey WITHIN a batch
+            // (only final_list applicants can be assigned here)
             $table->enum('status', [
-                'applied',
-                'shortlisted',
+                'assigned',              // Just assigned to batch
                 'interview_scheduled',
                 'interview_passed',
                 'interview_failed',
@@ -29,24 +31,28 @@ return new class extends Migration
                 'exam_pending',
                 'exam_passed',
                 'exam_failed',
-                'accepted',
-                'rejected',
-                'withdrawn',
-                'deployed',
-            ])->default('applied');
+                'accepted',              // Passed everything
+                'rejected',              // Failed in batch process
+                'withdrawn',             // Applicant withdrew
+                'deployed',              // Successfully deployed
+            ])->default('assigned');
 
-            $table->date('applied_at')->useCurrent();
+            // ─── Dates ──────────────────────────────
+            $table->timestamp('assigned_at')->useCurrent();
             $table->date('interview_date')->nullable();
             $table->date('medical_date')->nullable();
             $table->date('exam_date')->nullable();
-            $table->date('accepted_at')->nullable();
-            $table->date('deployed_at')->nullable();
+            $table->timestamp('accepted_at')->nullable();
+            $table->timestamp('deployed_at')->nullable();
 
+            // ─── Scores & Notes ─────────────────────
             $table->decimal('exam_score', 5, 2)->nullable();
             $table->text('interview_notes')->nullable();
             $table->text('medical_notes')->nullable();
             $table->text('rejection_reason')->nullable();
+            $table->text('remarks')->nullable();
 
+            // ─── Processed By ───────────────────────
             $table->foreignId('processed_by')
                   ->nullable()
                   ->constrained('users')
@@ -55,10 +61,10 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
 
-            // Prevent duplicate application to same batch
+            // Prevent duplicate assignment to same batch
             $table->unique(['applicant_id', 'batch_id']);
             $table->index('status');
-            $table->index('applied_at');
+            $table->index('assigned_at');
         });
     }
 

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\ApplicantStatus;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -17,7 +18,8 @@ class Applicant extends Model
 
     protected $fillable = [
         'applicant_code',
-        // Personal
+
+        // ─── Personal ────────────────────────────────
         'first_name',
         'middle_name',
         'last_name',
@@ -30,30 +32,41 @@ class Applicant extends Model
         'civil_status',
         'number_of_children',
         'nationality',
-        // Physical
+
+        // ─── Physical ────────────────────────────────
         'height_cm',
         'weight_kg',
         'dominant_hand',
         'blood_type',
-        // Address
+
+        // ─── Address ─────────────────────────────────
         'current_address',
         'permanent_address',
         'city',
         'province',
         'postal_code',
-        // Passport / IDs
+
+        // ─── Passport / IDs ──────────────────────────
         'passport_number',
         'passport_expiry',
         'sss_number',
         'tin_number',
         'philhealth_number',
         'pagibig_number',
-        // Status
+
+        // ─── Status ──────────────────────────────────
         'status',
+        'rejection_reason',
+        'final_listed_at',
+        'rejected_at',
+
+        // ─── Quality ─────────────────────────────────
         'quality_score',
         'quality_grade',
-        // Staff
+
+        // ─── Staff ───────────────────────────────────
         'assigned_staff_id',
+        'reviewed_by',
         'created_by',
     ];
 
@@ -69,10 +82,13 @@ class Applicant extends Model
     protected $casts = [
         'date_of_birth'      => 'date',
         'passport_expiry'    => 'date',
+        'final_listed_at'    => 'datetime',
+        'rejected_at'        => 'datetime',
         'number_of_children' => 'integer',
         'height_cm'          => 'decimal:2',
         'weight_kg'          => 'decimal:2',
         'quality_score'      => 'decimal:2',
+        'status'             => ApplicantStatus::class,
     ];
 
     protected $appends = ['full_name', 'age'];
@@ -86,6 +102,9 @@ class Applicant extends Model
             if (empty($applicant->applicant_code)) {
                 $applicant->applicant_code = static::generateUniqueCode();
             }
+
+            // Always starts as pending
+            $applicant->status ??= ApplicantStatus::Pending;
         });
     }
 
@@ -145,6 +164,11 @@ class Applicant extends Model
         return $this->belongsTo(User::class, 'assigned_staff_id');
     }
 
+    public function reviewer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
@@ -172,10 +196,10 @@ class Applicant extends Model
 
     public function currentEmployment(): HasOne
     {
-        return $this->hasOne(ApplicantEmployment::class)->where('is_current', true);
+        return $this->hasOne(ApplicantEmployment::class)
+            ->where('is_current', true);
     }
 
-    // ─── Documents ──────────────────────────────────────
     public function documents(): HasMany
     {
         return $this->hasMany(ApplicantDocument::class);
@@ -187,12 +211,21 @@ class Applicant extends Model
             ->where('is_current_version', true);
     }
 
+    // ─── Batch Relationships ─────────────────────────────
+    // Direct model relationship (preferred — full ApplicantBatch model)
+    public function applicantBatches(): HasMany
+    {
+        return $this->hasMany(ApplicantBatch::class);
+    }
+
+    // Many-to-many shortcut (use only for quick batch queries)
     public function batches(): BelongsToMany
     {
         return $this->belongsToMany(Batch::class, 'applicant_batches')
             ->withPivot([
+                'id',
                 'status',
-                'applied_at',
+                'assigned_at',
                 'interview_date',
                 'medical_date',
                 'exam_date',
@@ -202,14 +235,11 @@ class Applicant extends Model
                 'interview_notes',
                 'medical_notes',
                 'rejection_reason',
+                'remarks',
                 'processed_by',
             ])
-            ->withTimestamps();
-    }
-
-    public function applicantBatches(): HasMany
-    {
-        return $this->hasMany(ApplicantBatch::class);
+            ->withTimestamps()
+            ->using(ApplicantBatch::class);
     }
 
     // ═══════════════════════════════════════════════════════
@@ -217,16 +247,49 @@ class Applicant extends Model
     // ═══════════════════════════════════════════════════════
     public function scopePending($query)
     {
-        return $query->where('status', 'pending');
+        return $query->where('status', ApplicantStatus::Pending);
+    }
+
+    public function scopeUnderReview($query)
+    {
+        return $query->where('status', ApplicantStatus::UnderReview);
     }
 
     public function scopeVerified($query)
     {
-        return $query->where('status', 'verified');
+        return $query->where('status', ApplicantStatus::Verified);
+    }
+
+    public function scopeFinalList($query)
+    {
+        return $query->where('status', ApplicantStatus::FinalList);
+    }
+
+    public function scopeRejected($query)
+    {
+        return $query->where('status', ApplicantStatus::Rejected);
     }
 
     public function scopeByStaff($query, int $staffId)
     {
         return $query->where('assigned_staff_id', $staffId);
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // Helpers
+    // ═══════════════════════════════════════════════════════
+    public function isFinalList(): bool
+    {
+        return $this->status === ApplicantStatus::FinalList;
+    }
+
+    public function isRejected(): bool
+    {
+        return $this->status === ApplicantStatus::Rejected;
+    }
+
+    public function canBeAssignedToBatch(): bool
+    {
+        return $this->status === ApplicantStatus::FinalList;
     }
 }

@@ -36,15 +36,16 @@ class GetAllApplicantRequest extends FormRequest
             'order_by'  => ['nullable', Rule::in($this->getValidColumns())],
             'order_dir' => ['nullable', Rule::in(['asc', 'desc'])],
 
-            // Filters
+            // ─── Filters ─────────────────────────────────
             'status'             => ['nullable', 'string'],
+            'exclude_statuses'   => ['nullable', 'string'],  // ← added
             'gender'             => ['nullable', 'in:male,female'],
             'civil_status'       => ['nullable', 'string'],
             'nationality'        => ['nullable', 'string'],
             'quality_grade'      => ['nullable', 'in:A,B,C,D,F'],
             'assigned_staff_id'  => ['nullable', 'integer', 'exists:users,id'],
 
-            // Special filters
+            // ─── Special filters ─────────────────────────
             'passport_expiring_within_months' => ['nullable', 'integer', 'min:1', 'max:24'],
         ];
     }

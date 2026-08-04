@@ -45,8 +45,5 @@ final readonly class CreateApplicantDTO
         // Staff
         public ?int    $assignedStaffId   = null,
         public ?int    $createdBy         = null,
-
-        // Batch (optional)
-        public ?BatchAssignmentDTO $batch = null,
     ) {}
 }

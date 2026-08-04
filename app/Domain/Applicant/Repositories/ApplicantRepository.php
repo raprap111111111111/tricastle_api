@@ -10,10 +10,11 @@ class ApplicantRepository extends BaseRepository
 {
     protected string $model = Applicant::class;
 
+    // 🔑 Load applicantBatches with nested batch for list views
     protected array $relations = [
         'assignedStaff',
         'creator',
-        'batches',
+        'applicantBatches.batch',   // ← changed from 'batches'
     ];
 
     protected array $searchable = [
@@ -61,6 +62,15 @@ class ApplicantRepository extends BaseRepository
         $query   = parent::query();
         $request = request();
 
+        // ── Exclude statuses (comma-separated) ────────────
+        if ($request->filled('exclude_statuses')) {
+            $excluded = array_map(
+                'trim',
+                explode(',', $request->input('exclude_statuses')),
+            );
+            $query->whereNotIn('status', $excluded);
+        }
+
         // ── Passport expiring within X months ────────────
         if ($request->filled('passport_expiring_within_months')) {
             $months = (int) $request->input('passport_expiring_within_months');
@@ -71,15 +81,15 @@ class ApplicantRepository extends BaseRepository
 
         // ── Filter by batch_id ───────────────────────────
         if ($request->filled('batch_id')) {
-            $query->whereHas('batches', function (Builder $q) use ($request) {
-                $q->where('batches.id', $request->input('batch_id'));
+            $query->whereHas('applicantBatches', function (Builder $q) use ($request) {
+                $q->where('batch_id', $request->input('batch_id'));
             });
         }
 
         // ── Filter by batch status ───────────────────────
         if ($request->filled('batch_status')) {
-            $query->whereHas('batches', function (Builder $q) use ($request) {
-                $q->wherePivot('status', $request->input('batch_status'));
+            $query->whereHas('applicantBatches', function (Builder $q) use ($request) {
+                $q->where('status', $request->input('batch_status'));
             });
         }
 
@@ -90,59 +100,46 @@ class ApplicantRepository extends BaseRepository
     // Batch-specific Methods
     // ═══════════════════════════════════════════════════════
 
-    /**
-     * Attach an applicant to a batch.
-     */
     public function attachBatch(Applicant $applicant, int $batchId, array $pivotData = []): void
     {
-        $applicant->batches()->attach($batchId, array_merge([
-            'status'     => 'applied',
-            'applied_at' => now()->toDateString(),
+        $applicant->applicantBatches()->create(array_merge([
+            'batch_id'    => $batchId,
+            'status'      => 'assigned',
+            'assigned_at' => now(),
         ], $pivotData));
     }
 
-    /**
-     * Detach an applicant from a batch.
-     */
     public function detachBatch(Applicant $applicant, int $batchId): void
     {
-        $applicant->batches()->detach($batchId);
+        $applicant->applicantBatches()
+            ->where('batch_id', $batchId)
+            ->delete();
     }
 
-    /**
-     * Update pivot data for an applicant's batch.
-     */
     public function updateBatchStatus(
         Applicant $applicant,
         int       $batchId,
         string    $status,
         array     $pivotData = [],
     ): void {
-        $applicant->batches()->updateExistingPivot($batchId, array_merge(
-            ['status' => $status],
-            $pivotData,
-        ));
+        $applicant->applicantBatches()
+            ->where('batch_id', $batchId)
+            ->update(array_merge(['status' => $status], $pivotData));
     }
 
-    /**
-     * Check if applicant is already in a batch.
-     */
     public function isInBatch(Applicant $applicant, int $batchId): bool
     {
-        return $applicant->batches()
-                         ->where('batches.id', $batchId)
+        return $applicant->applicantBatches()
+                         ->where('batch_id', $batchId)
                          ->exists();
     }
 
-    /**
-     * Find applicant with full batch details.
-     */
     public function findWithBatches(int $id): ?Applicant
     {
         return Applicant::with([
             'assignedStaff',
             'creator',
-            'batches',
+            'applicantBatches.batch',
         ])->find($id);
     }
 }

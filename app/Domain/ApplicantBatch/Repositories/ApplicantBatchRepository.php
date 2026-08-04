@@ -1,7 +1,5 @@
 <?php
 
-// app/Domain/ApplicantBatch/Repositories/ApplicantBatchRepository.php
-
 namespace App\Domain\ApplicantBatch\Repositories;
 
 use App\Models\ApplicantBatch;
@@ -22,6 +20,7 @@ class ApplicantBatchRepository extends BaseRepository
         'interview_notes',
         'medical_notes',
         'rejection_reason',
+        'remarks',
     ];
 
     protected array $filterable = [
@@ -36,7 +35,7 @@ class ApplicantBatchRepository extends BaseRepository
         'applicant_id',
         'batch_id',
         'status',
-        'applied_at',
+        'assigned_at',
         'interview_date',
         'medical_date',
         'exam_date',
@@ -47,14 +46,14 @@ class ApplicantBatchRepository extends BaseRepository
         'updated_at',
     ];
 
-    protected string $defaultOrderBy        = 'applied_at';
+    protected string $defaultOrderBy        = 'assigned_at';
     protected string $defaultOrderDirection = 'desc';
 
     public function findByApplicantId(int $applicantId): Collection
     {
         return $this->query()
             ->where('applicant_id', $applicantId)
-            ->orderBy('applied_at', 'desc')
+            ->orderBy('assigned_at', 'desc')
             ->get();
     }
 
@@ -62,7 +61,7 @@ class ApplicantBatchRepository extends BaseRepository
     {
         return $this->query()
             ->where('batch_id', $batchId)
-            ->orderBy('applied_at', 'desc')
+            ->orderBy('assigned_at', 'desc')
             ->get();
     }
 }

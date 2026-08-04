@@ -52,17 +52,6 @@ class StoreApplicantRequest extends FormRequest
 
             // ─── Staff ───────────────────────────────────
             'assigned_staff_id'  => ['nullable', 'integer', 'exists:users,id'],
-
-            // ─── Batch Assignment (optional) ─────────────
-            'batch_id'           => ['nullable', 'integer', 'exists:batches,id'],
-            'batch_status'       => [
-                'nullable',
-                'required_with:batch_id',   // required if batch_id is present
-                'in:applied,shortlisted,interview_scheduled,interview_passed,
-                    interview_failed,medical_pending,medical_passed,medical_failed,
-                    exam_pending,exam_passed,exam_failed,accepted,rejected,
-                    withdrawn,deployed',
-            ],
         ];
     }
 

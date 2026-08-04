@@ -8,7 +8,7 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class GetAllApplicantBatchRequest extends FormRequest
 {
-    private const DEFAULT_ORDER_BY  = 'applied_at';
+    private const DEFAULT_ORDER_BY  = 'assigned_at';
     private const DEFAULT_ORDER_DIR = 'desc';
     private const DEFAULT_LIMIT     = 15;
     private const MAX_LIMIT         = 100;
@@ -30,27 +30,27 @@ class GetAllApplicantBatchRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'search'        => ['nullable', 'string', 'min:1', 'max:100'],
-            'offset'        => ['nullable', 'integer', 'min:0'],
-            'limit'         => ['nullable', 'integer', 'min:1', 'max:' . self::MAX_LIMIT],
-            'order_by'      => ['nullable', 'in:' . implode(',', $this->getValidColumns())],
-            'order_dir'     => ['nullable', 'in:asc,desc'],
+            'search'       => ['nullable', 'string', 'min:1', 'max:100'],
+            'offset'       => ['nullable', 'integer', 'min:0'],
+            'limit'        => ['nullable', 'integer', 'min:1', 'max:' . self::MAX_LIMIT],
+            'order_by'     => ['nullable', 'in:' . implode(',', $this->getValidColumns())],
+            'order_dir'    => ['nullable', 'in:asc,desc'],
 
             // Filters
-            'applicant_id'  => ['nullable', 'integer', 'exists:applicants,id'],
-            'batch_id'      => ['nullable', 'integer', 'exists:batches,id'],
-            'status'        => ['nullable', 'in:' . implode(',', ApplicantBatchStatus::values())],
-            'processed_by'  => ['nullable', 'integer', 'exists:users,id'],
+            'applicant_id' => ['nullable', 'integer', 'exists:applicants,id'],
+            'batch_id'     => ['nullable', 'integer', 'exists:batches,id'],
+            'status'       => ['nullable', 'in:' . implode(',', ApplicantBatchStatus::values())],
+            'processed_by' => ['nullable', 'integer', 'exists:users,id'],
 
             // Date filters
-            'date_from'     => ['nullable', 'date'],
-            'date_to'       => ['nullable', 'date', 'after_or_equal:date_from'],
-            'recent_days'   => ['nullable', 'integer', 'min:1', 'max:365'],
+            'date_from'    => ['nullable', 'date'],
+            'date_to'      => ['nullable', 'date', 'after_or_equal:date_from'],
+            'recent_days'  => ['nullable', 'integer', 'min:1', 'max:365'],
 
             // Special filters
-            'today'         => ['nullable', 'boolean'],
-            'this_week'     => ['nullable', 'boolean'],
-            'this_month'    => ['nullable', 'boolean'],
+            'today'        => ['nullable', 'boolean'],
+            'this_week'    => ['nullable', 'boolean'],
+            'this_month'   => ['nullable', 'boolean'],
         ];
     }
 
@@ -80,7 +80,7 @@ class GetAllApplicantBatchRequest extends FormRequest
             'applicant_id',
             'batch_id',
             'status',
-            'applied_at',
+            'assigned_at',      // renamed from applied_at
             'interview_date',
             'medical_date',
             'exam_date',

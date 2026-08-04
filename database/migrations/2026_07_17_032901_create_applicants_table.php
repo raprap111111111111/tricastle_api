@@ -49,15 +49,30 @@ return new class extends Migration
             $table->string('philhealth_number')->nullable();
             $table->string('pagibig_number')->nullable();
 
-            // ─── Status ──────────────────────────────
+            // ─── Application Status ──────────────────
             $table->enum('status', [
-                'pending', 'under_review', 'verified', 'rejected', 'incomplete'
+                'pending',        // Just created
+                'under_review',   // Staff is reviewing
+                'verified',       // Info/docs verified
+                'incomplete',     // Missing requirements
+                'final_list',     // Approved → ready for batch assignment
+                'rejected',       // Not qualified
             ])->default('pending');
+
+            $table->text('rejection_reason')->nullable();
+            $table->timestamp('final_listed_at')->nullable();   // When moved to final list
+            $table->timestamp('rejected_at')->nullable();
+
+            // ─── Quality Scoring ─────────────────────
             $table->decimal('quality_score', 5, 2)->default(0);
-            $table->string('quality_grade')->default('F'); // A-F
+            $table->string('quality_grade')->default('F');
 
             // ─── Staff Assignment ────────────────────
             $table->foreignId('assigned_staff_id')
+                  ->nullable()
+                  ->constrained('users')
+                  ->nullOnDelete();
+            $table->foreignId('reviewed_by')
                   ->nullable()
                   ->constrained('users')
                   ->nullOnDelete();
@@ -74,6 +89,7 @@ return new class extends Migration
             $table->index('quality_grade');
             $table->index('applicant_code');
             $table->index('passport_expiry');
+            $table->index('final_listed_at');
         });
     }
 

@@ -5,6 +5,7 @@ namespace App\Domain\ApplicantBatch\Actions;
 use App\Domain\ApplicantBatch\DTOs\CreateApplicantBatchDTO;
 use App\Domain\ApplicantBatch\Repositories\ApplicantBatchRepository;
 use App\Models\ApplicantBatch;
+use Illuminate\Support\Facades\Log;
 
 class CreateApplicantBatchAction
 {
@@ -14,12 +15,20 @@ class CreateApplicantBatchAction
 
     public function execute(CreateApplicantBatchDTO $dto): ApplicantBatch
     {
-        return $this->repository->create(array_filter([
+        $record = $this->repository->create([
             'applicant_id' => $dto->applicantId,
             'batch_id'     => $dto->batchId,
-            'status'       => $dto->status,
-            'applied_at'   => $dto->appliedAt ?? now()->toDateString(),
+            'status'       => 'assigned',       // Always starts as assigned
+            'assigned_at'  => now(),
             'processed_by' => $dto->processedBy,
-        ], fn ($value) => $value !== null));
+        ]);
+
+        Log::info('Applicant assigned to batch', [
+            'applicant_id' => $dto->applicantId,
+            'batch_id'     => $dto->batchId,
+            'processed_by' => $dto->processedBy,
+        ]);
+
+        return $record;
     }
 }

@@ -9,12 +9,15 @@ use App\Domain\Applicant\Actions\GetApplicantAction;
 use App\Domain\Applicant\Actions\ListApplicantsAction;
 use App\Domain\Applicant\Actions\TransferApplicantAction;
 use App\Domain\Applicant\Actions\UpdateApplicantAction;
+use App\Domain\Applicant\Actions\UpdateApplicantStatusAction;
 use App\Domain\Applicant\Mappers\ApplicantMapper;
 use App\Domain\Applicant\Services\DuplicateDetectionService;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\v1\Applicant\GetAllApplicantRequest;
+use App\Http\Requests\v1\Applicant\RejectApplicantRequest;
 use App\Http\Requests\v1\Applicant\StoreApplicantRequest;
 use App\Http\Requests\v1\Applicant\UpdateApplicantRequest;
+use App\Http\Requests\v1\Applicant\UpdateApplicantStatusRequest;
 use App\Http\Resources\v1\ApplicantResource;
 use App\Models\Applicant;
 use Illuminate\Http\JsonResponse;
@@ -23,14 +26,15 @@ use Illuminate\Http\Request;
 class ApplicantController extends Controller
 {
     public function __construct(
-        private readonly DuplicateDetectionService $duplicateService,
-        private readonly ListApplicantsAction    $listAction,
-        private readonly GetApplicantAction      $getAction,
-        private readonly CreateApplicantAction   $createAction,
-        private readonly UpdateApplicantAction   $updateAction,
-        private readonly DeleteApplicantAction   $deleteAction,
-        private readonly AssignApplicantAction   $assignAction,
-        private readonly TransferApplicantAction $transferAction,
+        private readonly DuplicateDetectionService     $duplicateService,
+        private readonly ListApplicantsAction          $listAction,
+        private readonly GetApplicantAction            $getAction,
+        private readonly CreateApplicantAction         $createAction,
+        private readonly UpdateApplicantAction         $updateAction,
+        private readonly DeleteApplicantAction         $deleteAction,
+        private readonly AssignApplicantAction         $assignAction,
+        private readonly TransferApplicantAction       $transferAction,
+        private readonly UpdateApplicantStatusAction   $updateStatusAction,
     ) {}
 
     public function index(GetAllApplicantRequest $request): JsonResponse
@@ -47,15 +51,15 @@ class ApplicantController extends Controller
     {
         $applicant->load([
             'assignedStaff',
+            'reviewer',                    // ← add
             'creator',
             'lifestyle',
             'educations',
             'employments',
             'tattoos',
-            'batches.company',
+            'applicantBatches.batch',      // ← add (direct relation with batch)
+            'applicantBatches.processedBy', // ← add
         ]);
-
-        $applicant = $this->getAction->execute($applicant->id);
 
         return $this->responseSuccess(
             new ApplicantResource($applicant),
@@ -96,6 +100,67 @@ class ApplicantController extends Controller
         return $this->responseSuccess(null, 'Applicant deleted successfully');
     }
 
+    // ═══════════════════════════════════════════════════════
+    // Status Transitions
+    // ═══════════════════════════════════════════════════════
+
+    /**
+     * Generic status update endpoint.
+     * PATCH /applicants/{id}/status
+     */
+    public function updateStatus(
+        UpdateApplicantStatusRequest $request,
+        Applicant $applicant,
+    ): JsonResponse {
+        $updated = $this->updateStatusAction->execute(
+            $applicant,
+            ApplicantMapper::fromUpdateStatusRequest($request)
+        );
+
+        return $this->responseSuccess(
+            new ApplicantResource($updated),
+            "Applicant status updated to {$updated->status->label()}"
+        );
+    }
+
+    /**
+     * Move applicant to final list (approved for batch assignment).
+     * PATCH /applicants/{id}/move-to-final-list
+     */
+    public function moveToFinalList(Request $request, Applicant $applicant): JsonResponse
+    {
+        $updated = $this->updateStatusAction->execute(
+            $applicant,
+            ApplicantMapper::forMoveToFinalList($request->user()?->id)
+        );
+
+        return $this->responseSuccess(
+            new ApplicantResource($updated),
+            'Applicant moved to final list successfully'
+        );
+    }
+
+    /**
+     * Reject applicant with a reason.
+     * PATCH /applicants/{id}/reject
+     */
+    public function reject(RejectApplicantRequest $request, Applicant $applicant): JsonResponse
+    {
+        $updated = $this->updateStatusAction->execute(
+            $applicant,
+            ApplicantMapper::fromRejectRequest($request)
+        );
+
+        return $this->responseSuccess(
+            new ApplicantResource($updated),
+            'Applicant rejected successfully'
+        );
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // Staff Assignment
+    // ═══════════════════════════════════════════════════════
+
     public function assign(Request $request, Applicant $applicant): JsonResponse
     {
         $request->validate([
@@ -104,7 +169,7 @@ class ApplicantController extends Controller
 
         $updated = $this->assignAction->execute(
             $applicant,
-            $request->validated('staff_id')
+            $request->input('staff_id')
         );
 
         return $this->responseSuccess(
@@ -112,7 +177,6 @@ class ApplicantController extends Controller
             'Applicant assigned successfully'
         );
     }
-
 
     public function transfer(Request $request, Applicant $applicant): JsonResponse
     {
@@ -123,8 +187,8 @@ class ApplicantController extends Controller
 
         $updated = $this->transferAction->execute(
             $applicant,
-            $request->validated('to_staff_id'),
-            $request->validated('reason')
+            $request->input('to_staff_id'),
+            $request->input('reason')
         );
 
         return $this->responseSuccess(
@@ -133,11 +197,10 @@ class ApplicantController extends Controller
         );
     }
 
+    // ═══════════════════════════════════════════════════════
+    // Duplicate Detection
+    // ═══════════════════════════════════════════════════════
 
-
-    /**
-     * Check for duplicates without creating.
-     */
     public function checkDuplicates(Request $request): JsonResponse
     {
         $request->validate([

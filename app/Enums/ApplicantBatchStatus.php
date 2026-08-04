@@ -1,11 +1,11 @@
 <?php
+// app/Domain/ApplicantBatch/Enums/ApplicantBatchStatus.php
 
 namespace App\Enums;
 
 enum ApplicantBatchStatus: string
 {
-    case APPLIED             = 'applied';
-    case SHORTLISTED         = 'shortlisted';
+    case ASSIGNED            = 'assigned';
     case INTERVIEW_SCHEDULED = 'interview_scheduled';
     case INTERVIEW_PASSED    = 'interview_passed';
     case INTERVIEW_FAILED    = 'interview_failed';
@@ -20,16 +20,10 @@ enum ApplicantBatchStatus: string
     case WITHDRAWN           = 'withdrawn';
     case DEPLOYED            = 'deployed';
 
-    public static function values(): array
-    {
-        return array_map(fn ($case) => $case->value, self::cases());
-    }
-
     public function label(): string
     {
         return match ($this) {
-            self::APPLIED             => 'Applied',
-            self::SHORTLISTED         => 'Shortlisted',
+            self::ASSIGNED            => 'Assigned',
             self::INTERVIEW_SCHEDULED => 'Interview Scheduled',
             self::INTERVIEW_PASSED    => 'Interview Passed',
             self::INTERVIEW_FAILED    => 'Interview Failed',
@@ -46,12 +40,37 @@ enum ApplicantBatchStatus: string
         };
     }
 
-    public function isTerminal(): bool
+    public function color(): string
     {
-        return in_array($this, [
+        return match ($this) {
+            self::ASSIGNED            => 'blue',
+            self::INTERVIEW_SCHEDULED => 'cyan',
+            self::INTERVIEW_PASSED    => 'teal',
+            self::INTERVIEW_FAILED    => 'red',
+            self::MEDICAL_PENDING     => 'orange',
+            self::MEDICAL_PASSED      => 'teal',
+            self::MEDICAL_FAILED      => 'red',
+            self::EXAM_PENDING        => 'orange',
+            self::EXAM_PASSED         => 'teal',
+            self::EXAM_FAILED         => 'red',
+            self::ACCEPTED            => 'green',
+            self::REJECTED            => 'red',
+            self::WITHDRAWN           => 'gray',
+            self::DEPLOYED            => 'green',
+        };
+    }
+
+    public static function values(): array
+    {
+        return array_column(self::cases(), 'value');
+    }
+
+    public function canProgress(): bool
+    {
+        return ! in_array($this, [
             self::REJECTED,
             self::WITHDRAWN,
             self::DEPLOYED,
-        ], true);
+        ]);
     }
 }

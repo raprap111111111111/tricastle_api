@@ -36,10 +36,16 @@ final readonly class UpdateApplicantDTO
         public ?string $philhealthNumber = null,
         public ?string $pagibigNumber    = null,
 
+        // ─── Status ──────────────────────────────────
         public ?string $status           = null,
+        public ?string $rejectionReason  = null,
+
+        // ─── Quality ─────────────────────────────────
         public ?float  $qualityScore     = null,
         public ?string $qualityGrade     = null,
 
+        // ─── Staff ───────────────────────────────────
         public ?int    $assignedStaffId  = null,
+        public ?int    $reviewedBy       = null,
     ) {}
 }
