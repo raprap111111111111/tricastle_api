@@ -20,7 +20,8 @@ class DatabaseSeeder extends Seeder
             RolesSeeder::class,         
             UsersSeeder::class,     
             ApplicantSeeder::class,
-            DocumentTypeSeeder::class
+            DocumentTypeSeeder::class,
+            ThemeSettingsSeeder::class
         ]);
 
         $this->command->info('');

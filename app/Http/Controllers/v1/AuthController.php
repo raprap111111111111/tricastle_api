@@ -58,6 +58,26 @@ class AuthController extends Controller
     }
 
     /**
+     * PUT /api/v1/auth/preferences
+     * Update the authenticated user's theme + effects preferences
+     */
+    public function updatePreferences(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'theme_preference' => 'sometimes|string|in:default,dark,christmas,halloween,valentines',
+            'effects_enabled'  => 'sometimes|boolean',
+        ]);
+
+        $user = $request->user();
+        $user->update($validated);
+
+        return $this->responseSuccess(
+            new UserResource($user->fresh()),
+            'Preferences updated successfully'
+        );
+    }
+
+    /**
      * POST /api/v1/auth/logout
      */
     public function logout(Request $request): JsonResponse

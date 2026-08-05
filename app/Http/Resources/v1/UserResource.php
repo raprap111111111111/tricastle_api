@@ -26,6 +26,8 @@ class UserResource extends JsonResource
             'position' => $this->position,
             'is_active' => (bool) $this->is_active,
             'last_login_at' => $this->last_login_at,
+            'theme_preference'  => $this->theme_preference ?? 'default',   // ← ADD
+            'effects_enabled'   => (bool) ($this->effects_enabled ?? true), // ← ADD
 
             'roles' => $this->whenLoaded('roles', fn() => $this->roles->pluck('name')),
 

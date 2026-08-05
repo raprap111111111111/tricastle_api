@@ -24,6 +24,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/profile', [AuthController::class, 'profile'])->name('auth.profile');
             Route::post('/logout', [AuthController::class, 'logout'])->name('auth.logout');
             Route::put('/change-password', [AuthController::class, 'changePassword'])->name('auth.change-password');
+            Route::put('/preferences', [AuthController::class, 'updatePreferences'])->name('auth.preferences'); // ✅ FIXED
         });
 
         // ============================================

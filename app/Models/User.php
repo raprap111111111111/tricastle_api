@@ -59,6 +59,8 @@ class User extends Authenticatable
         'preferences',
         'metadata',
         'notes',
+        'theme_preference',
+        'effects_enabled',
     ];
 
     protected $hidden = [
@@ -83,6 +85,8 @@ class User extends Authenticatable
             'preferences'           => 'array',
             'metadata'              => 'array',
             'two_factor_recovery_codes' => 'array',
+            'effects_enabled' => 'boolean',
+
         ];
     }
 
