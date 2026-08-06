@@ -5,21 +5,22 @@ namespace App\Domain\ApplicantDocument\Actions;
 
 use App\Domain\ApplicantDocument\DTOs\UploadApplicantDocumentDTO;
 use App\Domain\ApplicantDocument\Events\ApplicantDocumentUploaded;
-use App\Domain\ApplicantDocument\Notifications\DocumentUploadedNotification;
 use App\Domain\ApplicantDocument\Repositories\ApplicantDocumentRepository;
 use App\Domain\DocumentExpiryAlert\Actions\CreateAlertsForDocumentAction;
+use App\Domain\Notification\Traits\HasNotifications;
 use App\Models\ApplicantDocument;
 use App\Models\DocumentVersion;
 use App\Models\FileRepository;
-use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class UploadApplicantDocumentAction
 {
+    use HasNotifications;   // 🔔
+
     public function __construct(
-        private readonly ApplicantDocumentRepository $repository,
+        private readonly ApplicantDocumentRepository   $repository,
         private readonly CreateAlertsForDocumentAction $createAlertsAction,
     ) {}
 
@@ -37,13 +38,11 @@ class UploadApplicantDocumentAction
                 $fileRecord->incrementReferenceCount();
                 $filePath = $fileRecord->file_path;
             } else {
-                // ─── Store physical file ───────────────────────────
                 $filePath = Storage::disk('local')->putFile(
                     'documents/' . date('Y/m'),
                     $dto->file
                 );
 
-                // ─── Create FileRepository record ──────────────────
                 $fileRecord = FileRepository::create([
                     'file_hash'       => $fileHash,
                     'file_path'       => $filePath,
@@ -57,14 +56,13 @@ class UploadApplicantDocumentAction
                 ]);
             }
 
-            // ─── Get version number ────────────────────────────────
+            // ─── Version handling ─────────────────────────────────
             $version = ApplicantDocument::where('applicant_id', $dto->applicantId)
                 ->where('document_type_id', $dto->documentTypeId)
                 ->max('version') ?? 0;
 
             $newVersionNumber = $version + 1;
 
-            // ─── Mark previous versions as not current ─────────────
             ApplicantDocument::where('applicant_id', $dto->applicantId)
                 ->where('document_type_id', $dto->documentTypeId)
                 ->where('is_current_version', true)
@@ -93,7 +91,7 @@ class UploadApplicantDocumentAction
                 'uploaded_by'        => $dto->uploadedBy,
             ]);
 
-            // ─── Mark older version records as not current ─────────
+            // ─── Version tracking ─────────────────────────────────
             $documentIds = ApplicantDocument::where('applicant_id', $dto->applicantId)
                 ->where('document_type_id', $dto->documentTypeId)
                 ->pluck('id')
@@ -104,7 +102,6 @@ class UploadApplicantDocumentAction
                     ->update(['is_current' => false]);
             }
 
-            // ─── Create version record ─────────────────────────────
             DocumentVersion::create([
                 'applicant_document_id' => $document->id,
                 'version_number'        => $newVersionNumber,
@@ -119,21 +116,16 @@ class UploadApplicantDocumentAction
                     : 'New version uploaded',
             ]);
 
-            // ✅ ═════════════════════════════════════════════════════
-            // ✅ NEW: Auto-create expiry alerts if document has expiry
-            // ✅ ═════════════════════════════════════════════════════
+            // ─── Auto-create expiry alerts ─────────────────────────
             if ($dto->expiryDate) {
                 try {
                     $alerts = $this->createAlertsAction->execute($document);
 
                     Log::info('[UploadApplicantDocumentAction] Expiry alerts created', [
-                        'document_id'   => $document->id,
-                        'expiry_date'   => $dto->expiryDate,
-                        'alerts_count'  => count($alerts),
-                        'alert_types'   => array_map(fn($a) => $a->alert_type, $alerts),
+                        'document_id'  => $document->id,
+                        'alerts_count' => count($alerts),
                     ]);
                 } catch (\Throwable $e) {
-                    // Don't fail the upload if alert creation fails
                     Log::error('[UploadApplicantDocumentAction] Failed to create expiry alerts', [
                         'document_id' => $document->id,
                         'error'       => $e->getMessage(),
@@ -141,18 +133,37 @@ class UploadApplicantDocumentAction
                 }
             }
 
-            // ─── Notify admins new document needs verification ─────
-            User::permission('correction-request.viewAny')
-                ->get()
-                ->each(fn(User $admin) => $admin->notify(
-                    new DocumentUploadedNotification($document)
-                ));
-
             return $document;
         });
 
-        // ✅ Fire event AFTER transaction commits (safer for queued listeners)
+        // ✅ Fire event AFTER transaction commits
         ApplicantDocumentUploaded::dispatch($document);
+
+        // 🔔 Send notifications
+        $applicant = $document->applicant;
+        $docType   = $document->documentType?->name ?? 'Document';
+        $name      = $applicant ? "{$applicant->first_name} {$applicant->last_name}" : 'Unknown';
+        $code      = $applicant?->applicant_code ?? '';
+
+        // Notify staff who can verify documents
+        $this->notifyStaff(
+            permissions: ['document.viewAny', 'correction-request.viewAny'],
+            title:       '📄 New Document Uploaded',
+            message:     "{$docType} was uploaded for {$name} ({$code}) and needs verification.",
+            module:      'document',
+            actionUrl:   "/documents/{$document->id}",
+        );
+
+        // Personal notification to assigned staff
+        if ($applicant?->assigned_staff_id && $applicant->assigned_staff_id !== $dto->uploadedBy) {
+            $this->notifyUser(
+                user:      $applicant->assigned_staff_id,
+                title:     '📎 New Document for Your Applicant',
+                message:   "{$docType} was uploaded for {$name}.",
+                module:    'document',
+                actionUrl: "/documents/{$document->id}",
+            );
+        }
 
         return $document;
     }

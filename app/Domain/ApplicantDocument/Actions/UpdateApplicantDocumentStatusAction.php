@@ -3,6 +3,7 @@
 
 namespace App\Domain\ApplicantDocument\Actions;
 
+use App\Domain\Notification\Traits\HasNotifications;
 use App\Models\ApplicantDocument;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -10,6 +11,8 @@ use RuntimeException;
 
 class UpdateApplicantDocumentStatusAction
 {
+    use HasNotifications;   // 🔔
+
     /**
      * @param array{
      *     status: string,
@@ -28,12 +31,10 @@ class UpdateApplicantDocumentStatusAction
             throw new RuntimeException('An authenticated user is required to update document status.');
         }
 
-        return DB::transaction(function () use ($document, $data, $userId) {
+        $updated = DB::transaction(function () use ($document, $data, $userId) {
             $status = $data['status'];
 
-            $updates = [
-                'status' => $status,
-            ];
+            $updates = ['status' => $status];
 
             if (array_key_exists('notes', $data)) {
                 $updates['notes'] = $data['notes'];
@@ -81,5 +82,79 @@ class UpdateApplicantDocumentStatusAction
 
             return $document->refresh();
         });
+
+        // 🔔 Send status-based notifications
+        $this->sendStatusNotifications($updated, $data['rejection_reason'] ?? null);
+
+        return $updated;
+    }
+
+    /**
+     * 🔔 Notify uploader + assigned staff about status change
+     */
+    private function sendStatusNotifications(ApplicantDocument $document, ?string $reason): void
+    {
+        $applicant = $document->applicant;
+        $docType   = $document->documentType?->name ?? 'Document';
+        $name      = $applicant ? "{$applicant->first_name} {$applicant->last_name}" : 'Unknown';
+
+        // Message templates per status
+        $configs = [
+            'verified' => [
+                'title'    => '✅ Document Verified',
+                'message'  => "{$docType} for {$name} is now verified.",
+                'severity' => 'success',
+            ],
+            'rejected' => [
+                'title'    => '❌ Document Rejected',
+                'message'  => "{$docType} for {$name} was rejected. Reason: " . ($reason ?? 'No reason provided'),
+                'severity' => 'error',
+            ],
+            'expired' => [
+                'title'    => '⏰ Document Expired',
+                'message'  => "{$docType} for {$name} has expired.",
+                'severity' => 'warn',
+            ],
+            'requires_correction' => [
+                'title'    => '⚠️ Correction Required',
+                'message'  => "{$docType} for {$name} needs correction.",
+                'severity' => 'warn',
+            ],
+            'under_review' => [
+                'title'    => '👀 Document Under Review',
+                'message'  => "{$docType} for {$name} is being reviewed.",
+                'severity' => 'info',
+            ],
+            'pending_verification' => [
+                'title'    => '📄 Document Pending Verification',
+                'message'  => "{$docType} for {$name} awaits verification.",
+                'severity' => 'info',
+            ],
+        ];
+
+        $cfg = $configs[$document->status] ?? null;
+        if (!$cfg) return;
+
+        // 🔔 Notify uploader
+        $this->notifyUser(
+            user:      $document->uploaded_by,
+            title:     $cfg['title'],
+            message:   $cfg['message'],
+            module:    'document',
+            actionUrl: "/documents/{$document->id}",
+            severity:  $cfg['severity'],
+        );
+
+        // 🔔 Notify assigned staff (if different from uploader)
+        if ($applicant?->assigned_staff_id && $applicant->assigned_staff_id !== $document->uploaded_by) {
+            $this->notifyUser(
+                user:      $applicant->assigned_staff_id,
+                title:     $cfg['title'],
+                message:   $cfg['message'],
+                module:    'document',
+                actionUrl: "/documents/{$document->id}",
+                severity:  $cfg['severity'],
+            );
+        }
     }
 }

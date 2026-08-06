@@ -1,5 +1,4 @@
 <?php
-// app/Domain/Notification/Actions/DeleteNotificationAction.php
 
 namespace App\Domain\Notification\Actions;
 
@@ -9,11 +8,11 @@ use App\Models\Notification;
 class DeleteNotificationAction
 {
     public function __construct(
-        private readonly NotificationRepository $repository
+        private readonly NotificationRepository $repository,
     ) {}
 
-    public function execute(Notification $notification): void
+    public function execute(Notification $notification): bool
     {
-        $this->repository->delete($notification->id);
+        return $this->repository->delete($notification);
     }
 }

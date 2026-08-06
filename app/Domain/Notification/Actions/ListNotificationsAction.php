@@ -1,5 +1,4 @@
 <?php
-// app/Domain/Notification/Actions/ListNotificationsAction.php
 
 namespace App\Domain\Notification\Actions;
 
@@ -8,17 +7,12 @@ use App\Domain\Notification\Repositories\NotificationRepository;
 class ListNotificationsAction
 {
     public function __construct(
-        private readonly NotificationRepository $repository
+        private readonly NotificationRepository $repository,
     ) {}
 
-    public function execute(array $params, string $resource): array
+    public function execute(array $filters, string $resourceClass = null)
     {
-        $paginated    = $this->repository->paginate($params, $resource);
-        $unreadCount  = $this->repository->countUnread();
-
-        return [
-            'notifications' => $paginated,
-            'unread_count'  => $unreadCount,
-        ];
+        $filters['user_id'] = auth()->id();
+        return $this->repository->list($filters);
     }
 }

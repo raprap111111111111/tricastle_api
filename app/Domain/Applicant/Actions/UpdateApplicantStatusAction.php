@@ -5,6 +5,7 @@ namespace App\Domain\Applicant\Actions;
 use App\Constants\PubNubChannels;
 use App\Domain\Applicant\DTOs\UpdateStatusDTO;
 use App\Domain\Applicant\Repositories\ApplicantRepository;
+use App\Domain\Notification\Traits\HasNotifications;
 use App\Enums\ApplicantStatus;
 use App\Models\Applicant;
 use App\Models\Batch;
@@ -14,6 +15,8 @@ use Illuminate\Support\Facades\Log;
 
 class UpdateApplicantStatusAction
 {
+    use HasNotifications;   // 🔔
+
     public function __construct(
         private readonly ApplicantRepository $repository,
         private readonly PubNubService       $pubnub,
@@ -21,7 +24,7 @@ class UpdateApplicantStatusAction
 
     public function execute(Applicant $applicant, UpdateStatusDTO $dto): Applicant
     {
-        return DB::transaction(function () use ($applicant, $dto) {
+        $updated = DB::transaction(function () use ($applicant, $dto) {
             $oldStatus = $applicant->status?->value;
 
             $data = [
@@ -54,7 +57,7 @@ class UpdateApplicantStatusAction
                 $this->autoAssignToActiveBatch($updated, $dto->reviewedBy);
             }
 
-            // 📡 Broadcast via PubNub
+            // 📡 PubNub — refresh applicant lists in real-time
             $this->pubnub->broadcast(
                 [
                     PubNubChannels::APPLICANTS,
@@ -73,8 +76,13 @@ class UpdateApplicantStatusAction
                 ],
             );
 
-            return $updated->fresh(['applicantBatches.batch']);
+            return $updated;
         });
+
+        // 🔔 Send notifications AFTER transaction commits
+        $this->sendStatusNotifications($updated, $dto);
+
+        return $updated->fresh(['applicantBatches.batch']);
     }
 
     private function autoAssignToActiveBatch(Applicant $applicant, ?int $processedBy): void
@@ -97,7 +105,6 @@ class UpdateApplicantStatusAction
             'processed_by' => $processedBy,
         ]);
 
-        // 📡 Notify batch subscribers
         $this->pubnub->publish(
             PubNubChannels::forBatch($activeBatch->id),
             [
@@ -110,6 +117,71 @@ class UpdateApplicantStatusAction
                     'name'           => "{$applicant->first_name} {$applicant->last_name}",
                 ],
             ],
+        );
+    }
+
+    /**
+     * 🔔 Send smart notifications based on status
+     */
+    private function sendStatusNotifications(Applicant $applicant, UpdateStatusDTO $dto): void
+    {
+        $name = "{$applicant->first_name} {$applicant->last_name}";
+        $code = $applicant->applicant_code;
+
+        // ─── Moved to Final List ─────────────────────────
+        if ($dto->status === ApplicantStatus::FinalList) {
+            $this->notifySuccess(
+                permissions: ['applicant.viewAny', 'batch.viewAny'],
+                title:       '✅ Applicant Approved',
+                message:     "{$name} ({$code}) has been moved to the Final List.",
+                module:      'applicant',
+                actionUrl:   "/applicants/{$applicant->id}",
+            );
+
+            // Personal to assigned staff
+            $this->notifyUser(
+                user:      $applicant->assigned_staff_id,
+                title:     '🎉 Your applicant was approved!',
+                message:   "{$name} ({$code}) — assigned to you — is now on the Final List.",
+                module:    'applicant',
+                actionUrl: "/applicants/{$applicant->id}",
+                severity:  'success',
+            );
+            return;
+        }
+
+        // ─── Rejected ────────────────────────────────────
+        if ($dto->status === ApplicantStatus::Rejected) {
+            $reason = $dto->rejectionReason ?? 'No reason provided';
+
+            $this->notifyWarning(
+                permissions: 'applicant.viewAny',
+                title:       '❌ Applicant Rejected',
+                message:     "{$name} ({$code}) was rejected. Reason: {$reason}",
+                module:      'applicant',
+                actionUrl:   "/applicants/rejected",
+            );
+
+            $this->notifyUser(
+                user:      $applicant->assigned_staff_id,
+                title:     '⚠️ Your applicant was rejected',
+                message:   "{$name} ({$code}) was rejected. Reason: {$reason}",
+                module:    'applicant',
+                actionUrl: "/applicants/rejected",
+                severity:  'warn',
+            );
+            return;
+        }
+
+        // ─── Other status changes ────────────────────────
+        $readable = ucwords(str_replace('_', ' ', $dto->status->value));
+
+        $this->notifyStaff(
+            permissions: 'applicant.viewAny',
+            title:       '📌 Applicant Status Updated',
+            message:     "{$name} ({$code}) is now: {$readable}",
+            module:      'applicant',
+            actionUrl:   "/applicants/{$applicant->id}",
         );
     }
 }

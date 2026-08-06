@@ -1,72 +1,105 @@
 <?php
-// app/Domain/Notification/Repositories/NotificationRepository.php
 
 namespace App\Domain\Notification\Repositories;
 
 use App\Models\Notification;
-use App\Support\Query\BaseRepository;
-use Illuminate\Database\Eloquent\Builder;
+use App\Models\User;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
-class NotificationRepository extends BaseRepository
+class NotificationRepository
 {
-    protected string $model = Notification::class;
-
-    protected array $relations  = [];
-    protected array $searchable = ['type'];
-    protected array $filterable = ['read_at'];
-    protected array $sortable   = ['created_at', 'read_at'];
-
-    protected string $defaultOrderBy        = 'created_at';
-    protected string $defaultOrderDirection = 'desc';
-
-    public function query(): Builder
+    public function list(array $filters = []): LengthAwarePaginator
     {
-        $query   = parent::query();
-        $request = request();
+        $userId = $filters['user_id'] ?? Auth::id();
 
-        // Scope to authenticated user's notifications only
-        $query->where('notifiable_type', \App\Models\User::class)
-              ->where('notifiable_id', auth()->id());
+        // 🔍 DEBUG LOGS
+        Log::info('🔔 NotificationRepository::list', [
+            'user_id'          => $userId,
+            'auth_user'        => Auth::id(),
+            'user_model_class' => User::class,
+            'filters'          => $filters,
+        ]);
 
-        // Filter: unread only
-        if ($request->filled('unread') && $request->boolean('unread')) {
-            $query->whereNull('read_at');
+        // Count ALL notifications in DB (any user)
+        $totalInDb = Notification::count();
+        Log::info("📊 Total notifications in DB: {$totalInDb}");
+
+        // Count for THIS user with User::class
+        $forThisUser = Notification::where('notifiable_type', User::class)
+            ->where('notifiable_id', $userId)
+            ->count();
+        Log::info("📊 Notifications for user {$userId} (User::class): {$forThisUser}");
+
+        // Check what notifiable_type values exist
+        $types = Notification::distinct()->pluck('notifiable_type')->toArray();
+        Log::info('📊 Distinct notifiable_type values in DB:', $types);
+
+        // Check what notifiable_ids exist
+        $ids = Notification::distinct()->pluck('notifiable_id')->toArray();
+        Log::info('📊 Distinct notifiable_ids in DB:', $ids);
+
+        // Build query
+        $query = Notification::query()
+            ->where('notifiable_type', User::class)
+            ->where('notifiable_id',   $userId);
+
+        // Filter by read/unread
+        if (isset($filters['is_read']) && $filters['is_read'] !== null && $filters['is_read'] !== '') {
+            $isRead = filter_var($filters['is_read'], FILTER_VALIDATE_BOOLEAN);
+            $isRead
+                ? $query->whereNotNull('read_at')
+                : $query->whereNull('read_at');
         }
 
-        // Filter: read only
-        if ($request->filled('read') && $request->boolean('read')) {
-            $query->whereNotNull('read_at');
+        // Filter by module
+        if (!empty($filters['module'])) {
+            $query->where('data', 'like', '%"module":"' . $filters['module'] . '"%');
         }
 
-        return $query;
+        // Search
+        if (!empty($filters['search'])) {
+            $query->where('data', 'like', '%' . $filters['search'] . '%');
+        }
+
+        // Sort
+        $orderBy  = $filters['order_by']  ?? 'created_at';
+        $orderDir = $filters['order_dir'] ?? 'desc';
+        $query->orderBy($orderBy, $orderDir);
+
+        $result = $query->paginate($filters['limit'] ?? 10);
+
+        Log::info("✅ Final query result: {$result->total()} notifications returned");
+
+        return $result;
     }
 
-    public function markAsRead(string $id): Notification
+    public function find(string $id): ?Notification
     {
-        $notification = $this->findOrFail($id);
+        return Notification::where('id', $id)
+            ->where('notifiable_id', Auth::id())
+            ->first();
+    }
 
-        if ($notification->read_at === null) {
+    public function markAsRead(Notification $notification): Notification
+    {
+        if (!$notification->read_at) {
             $notification->update(['read_at' => now()]);
         }
-
         return $notification->fresh();
     }
 
-    public function markAllAsRead(): int
+    public function markAllAsRead(int $userId): int
     {
-        return \App\Models\Notification::query()
-            ->where('notifiable_type', \App\Models\User::class)
-            ->where('notifiable_id', auth()->id())
+        return Notification::where('notifiable_type', User::class)
+            ->where('notifiable_id', $userId)
             ->whereNull('read_at')
             ->update(['read_at' => now()]);
     }
 
-    public function countUnread(): int
+    public function delete(Notification $notification): bool
     {
-        return \App\Models\Notification::query()
-            ->where('notifiable_type', \App\Models\User::class)
-            ->where('notifiable_id', auth()->id())
-            ->whereNull('read_at')
-            ->count();
+        return $notification->delete();
     }
 }

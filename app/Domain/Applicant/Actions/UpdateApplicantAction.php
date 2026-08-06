@@ -4,11 +4,14 @@ namespace App\Domain\Applicant\Actions;
 
 use App\Domain\Applicant\DTOs\UpdateApplicantDTO;
 use App\Domain\Applicant\Repositories\ApplicantRepository;
+use App\Domain\Notification\Traits\HasNotifications;
 use App\Models\Applicant;
 use Illuminate\Support\Facades\Log;
 
 class UpdateApplicantAction
 {
+    use HasNotifications;   // 🔔
+
     public function __construct(
         private readonly ApplicantRepository $repository
     ) {}
@@ -57,10 +60,9 @@ class UpdateApplicantAction
         if ($dto->status !== null) {
             $data['status'] = $dto->status;
 
-            // Moving to final list
             if ($dto->status === 'final_list') {
-                $data['final_listed_at'] = now();
-                $data['rejected_at']     = null;
+                $data['final_listed_at']  = now();
+                $data['rejected_at']      = null;
                 $data['rejection_reason'] = null;
 
                 Log::info('Applicant moved to final list', [
@@ -69,7 +71,6 @@ class UpdateApplicantAction
                 ]);
             }
 
-            // Rejecting applicant
             if ($dto->status === 'rejected') {
                 $data['rejected_at']      = now();
                 $data['rejection_reason'] = $dto->rejectionReason;
@@ -83,6 +84,22 @@ class UpdateApplicantAction
             }
         }
 
-        return $this->repository->update($applicant->id, $data);
+        $updated = $this->repository->update($applicant->id, $data);
+
+        // 🔔 Notify assigned staff about update (not self)
+        $name = "{$updated->first_name} {$updated->last_name}";
+        $code = $updated->applicant_code;
+
+        if ($updated->assigned_staff_id) {
+            $this->notifyUser(
+                user:      $updated->assigned_staff_id,
+                title:     '✏️ Applicant Updated',
+                message:   "{$name} ({$code}) has been updated.",
+                module:    'applicant',
+                actionUrl: "/applicants/{$updated->id}",
+            );
+        }
+
+        return $updated;
     }
 }

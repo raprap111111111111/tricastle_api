@@ -23,6 +23,8 @@ class GetAllNotificationRequest extends FormRequest
             'order_by'  => $this->getValidOrderBy(),
             'order_dir' => $this->getValidOrderDir(),
             'limit'     => $this->getValidLimit(),
+            // 🎯 Normalize is_read string → boolean
+            'is_read'   => $this->normalizeIsRead(),
         ]);
     }
 
@@ -35,7 +37,24 @@ class GetAllNotificationRequest extends FormRequest
             'order_by'  => ['nullable', 'in:' . implode(',', $this->getValidColumns())],
             'order_dir' => ['nullable', 'in:asc,desc'],
             'is_read'   => ['nullable', 'boolean'],
+            'module'    => ['nullable', 'string', 'max:50'],   // ← ADD module filter
         ];
+    }
+
+    /**
+     * Convert 'true'/'false' strings to actual booleans
+     */
+    protected function normalizeIsRead(): mixed
+    {
+        $value = $this->input('is_read');
+
+        if ($value === null || $value === '') return null;
+
+        // Convert string representations to boolean
+        if (in_array($value, [true, 'true', '1', 1], true))  return true;
+        if (in_array($value, [false, 'false', '0', 0], true)) return false;
+
+        return $value; // let validator handle invalid values
     }
 
     protected function getValidOrderBy(): string

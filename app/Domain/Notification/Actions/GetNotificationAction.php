@@ -1,5 +1,4 @@
 <?php
-// app/Domain/Notification/Actions/GetNotificationAction.php
 
 namespace App\Domain\Notification\Actions;
 
@@ -9,11 +8,11 @@ use App\Models\Notification;
 class GetNotificationAction
 {
     public function __construct(
-        private readonly NotificationRepository $repository
+        private readonly NotificationRepository $repository,
     ) {}
 
-    public function execute(string $id): Notification
+    public function execute(string $id): ?Notification
     {
-        return $this->repository->findOrFail($id);
+        return $this->repository->find($id);
     }
 }
