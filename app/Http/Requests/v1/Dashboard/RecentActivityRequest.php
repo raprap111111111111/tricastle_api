@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Http\Requests\Dashboard;
+namespace App\Http\Requests\v1\Dashboard;
 
 use Illuminate\Foundation\Http\FormRequest;
 

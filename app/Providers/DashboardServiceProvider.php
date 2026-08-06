@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
-use App\Domains\Dashboard\Contracts\DashboardRepositoryInterface;
-use App\Repositories\Dashboard\DashboardRepository;
+
+use App\Domain\Dashboard\Contracts\DashboardRepositoryInterface;
+use App\Domain\Dashboard\Repositories\DashboardRepository;
 use Illuminate\Support\ServiceProvider;
 
 class DashboardServiceProvider extends ServiceProvider

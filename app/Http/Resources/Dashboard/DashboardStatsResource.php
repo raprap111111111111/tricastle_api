@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources\Dashboard;
 
-use App\Domains\Dashboard\DTOs\DashboardStatsDTO;
+use App\Domain\Dashboard\DTOs\DashboardStatsDTO;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 

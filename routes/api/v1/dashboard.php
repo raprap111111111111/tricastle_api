@@ -13,19 +13,32 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('dashboard')->name('dashboard.')->group(function () {
 
-    // GET /api/v1/dashboard/stats
+    // ─── Core ─────────────────────────────────────
     Route::get('/stats', [DashboardController::class, 'stats'])
         ->name('stats');
 
-    // GET /api/v1/dashboard/overview  (optional summary cards)
-    Route::get('/overview', [DashboardController::class, 'overview'])
-        ->name('overview');
-
-    // GET /api/v1/dashboard/activities  (recent activity feed)
     Route::get('/activities', [DashboardController::class, 'activities'])
         ->name('activities');
 
-    // GET /api/v1/dashboard/charts/{type?}  (optional)
-    Route::get('/charts/{type?}', [DashboardController::class, 'charts'])
-        ->name('charts');
+    Route::get('/overview', [DashboardController::class, 'overview'])
+        ->name('overview');
+
+    // ─── New Analytics ────────────────────────────
+    Route::get('/trends', [DashboardController::class, 'trends'])
+        ->name('trends');
+
+    Route::get('/status-breakdown', [DashboardController::class, 'statusBreakdown'])
+        ->name('status-breakdown');
+
+    Route::get('/pipeline', [DashboardController::class, 'pipeline'])
+        ->name('pipeline');
+
+    Route::get('/active-batches', [DashboardController::class, 'activeBatches'])
+        ->name('active-batches');
+
+    Route::get('/quick-stats', [DashboardController::class, 'quickStats'])
+        ->name('quick-stats');
+
+    Route::get('/attention', [DashboardController::class, 'attention'])
+        ->name('attention');
 });

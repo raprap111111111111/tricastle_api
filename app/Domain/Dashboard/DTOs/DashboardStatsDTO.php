@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
-namespace App\Domains\Dashboard\DTOs;
+namespace App\Domain\Dashboard\DTOs;
+
+use App\Domain\Dashboard\DTOs\StatCardDTO;
 
 final class DashboardStatsDTO
 {
