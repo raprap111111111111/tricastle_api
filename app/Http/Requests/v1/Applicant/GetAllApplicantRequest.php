@@ -38,12 +38,21 @@ class GetAllApplicantRequest extends FormRequest
 
             // ─── Filters ─────────────────────────────────
             'status'             => ['nullable', 'string'],
-            'exclude_statuses'   => ['nullable', 'string'],  // ← added
+            'exclude_statuses'   => ['nullable', 'string'],
             'gender'             => ['nullable', 'in:male,female'],
             'civil_status'       => ['nullable', 'string'],
             'nationality'        => ['nullable', 'string'],
             'quality_grade'      => ['nullable', 'in:A,B,C,D,F'],
             'assigned_staff_id'  => ['nullable', 'integer', 'exists:users,id'],
+
+            // ─── Batch filters ───────────────────────────
+            'batch_id'           => ['nullable', 'integer', 'exists:batches,id'],
+            'batch_status'       => ['nullable', 'string'],
+
+            // ─── 🗺️ Location filters (NEW) ──────────────
+            'city'               => ['nullable', 'string', 'max:100'],
+            'province'           => ['nullable', 'string', 'max:100'],
+            'address'            => ['nullable', 'string', 'max:200'],
 
             // ─── Special filters ─────────────────────────
             'passport_expiring_within_months' => ['nullable', 'integer', 'min:1', 'max:24'],

@@ -41,7 +41,7 @@ class UpdateUserAction
                 $data['avatar'] = $this->userService->uploadAvatar($dto->avatar);
             }
 
-            $user = $this->repository->update($user, $data);
+            $user = $this->repository->update($user->id, $data);
 
             if ($dto->role) {
                 $user->syncRoles([$dto->role]);

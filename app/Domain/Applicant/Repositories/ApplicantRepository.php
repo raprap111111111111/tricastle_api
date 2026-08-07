@@ -10,11 +10,10 @@ class ApplicantRepository extends BaseRepository
 {
     protected string $model = Applicant::class;
 
-    // 🔑 Load applicantBatches with nested batch for list views
     protected array $relations = [
         'assignedStaff',
         'creator',
-        'applicantBatches.batch',   // ← changed from 'batches'
+        'applicantBatches.batch',
     ];
 
     protected array $searchable = [
@@ -93,11 +92,35 @@ class ApplicantRepository extends BaseRepository
             });
         }
 
+        // ══════════════════════════════════════════════════
+        // 🗺️ LOCATION FILTERS (NEW)
+        // ══════════════════════════════════════════════════
+
+        // ── Filter by city (partial match, case-insensitive)
+        if ($request->filled('city')) {
+            $city = trim($request->input('city'));
+            $query->where('city', 'like', '%' . $city . '%');
+        }
+
+        // ── Filter by province (exact match — from dropdown)
+        if ($request->filled('province')) {
+            $query->where('province', $request->input('province'));
+        }
+
+        // ── Filter by address keyword (searches both current + permanent)
+        if ($request->filled('address')) {
+            $address = trim($request->input('address'));
+            $query->where(function (Builder $q) use ($address) {
+                $q->where('current_address', 'like', '%' . $address . '%')
+                  ->orWhere('permanent_address', 'like', '%' . $address . '%');
+            });
+        }
+
         return $query;
     }
 
     // ═══════════════════════════════════════════════════════
-    // Batch-specific Methods
+    // Batch-specific Methods (existing, unchanged)
     // ═══════════════════════════════════════════════════════
 
     public function attachBatch(Applicant $applicant, int $batchId, array $pivotData = []): void

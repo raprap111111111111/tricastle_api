@@ -14,6 +14,6 @@ class GetUserAction
 
     public function execute(int $id): User
     {
-        return $this->repository->find($id);
+        return $this->repository->findOrFail($id);
     }
 }
