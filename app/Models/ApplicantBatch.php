@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Database\Eloquent\SoftDeletes;
-// ✅ Spatie Activitylog v5
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
 
@@ -36,17 +35,41 @@ class ApplicantBatch extends Pivot
         'rejection_reason',
         'remarks',
         'processed_by',
+
+        // 🚀 Deployment fields
+        'deployment_country',
+        'deployment_company',
+        'deployment_position',
+        'contract_duration_months',
+        'contract_start_date',
+        'contract_end_date',
+        'monthly_salary',
+        'salary_currency',
+        'flight_date',
+        'visa_type',
+        'deployment_notes',
+        'cancellation_reason',
+        'cancelled_at',
+        'cancelled_by',
     ];
 
     protected $casts = [
-        'status'         => ApplicantBatchStatus::class,
-        'assigned_at'    => 'datetime',
-        'interview_date' => 'date',
-        'medical_date'   => 'date',
-        'exam_date'      => 'date',
-        'accepted_at'    => 'datetime',
-        'deployed_at'    => 'datetime',
-        'exam_score'     => 'decimal:2',
+        'status'                   => ApplicantBatchStatus::class,
+        'assigned_at'              => 'datetime',
+        'interview_date'           => 'date',
+        'medical_date'             => 'date',
+        'exam_date'                => 'date',
+        'accepted_at'              => 'datetime',
+        'deployed_at'              => 'datetime',
+        'exam_score'               => 'decimal:2',
+
+        // 🚀 Deployment casts
+        'contract_start_date'      => 'date',
+        'contract_end_date'        => 'date',
+        'flight_date'              => 'date',
+        'cancelled_at'             => 'datetime',
+        'monthly_salary'           => 'decimal:2',
+        'contract_duration_months' => 'integer',
     ];
 
     protected static function booted(): void
@@ -72,9 +95,17 @@ class ApplicantBatch extends Pivot
                 'exam_score',
                 'rejection_reason',
                 'processed_by',
+
+                // 🚀 Log deployment changes
+                'deployment_country',
+                'deployment_company',
+                'deployment_position',
+                'contract_duration_months',
+                'monthly_salary',
+                'cancellation_reason',
             ])
             ->logOnlyDirty()
-            ->dontLogEmptyChanges() // ✅ was dontSubmitEmptyLogs()
+            ->dontLogEmptyChanges()
             ->useLogName('ApplicantBatch')
             ->setDescriptionForEvent(function (string $event) {
                 $applicantName = $this->applicant?->applicant_code ?? "applicant #{$this->applicant_id}";
@@ -83,6 +114,11 @@ class ApplicantBatch extends Pivot
                 if ($event === 'updated' && $this->isDirty('status')) {
                     $newStatus = $this->status?->value ?? $this->status;
                     $readable  = str_replace('_', ' ', (string) $newStatus);
+
+                    // 🚀 Special message for deployment
+                    if ($newStatus === 'deployed' && $this->deployment_country) {
+                        return "Deployed {$applicantName} to {$this->deployment_country} ({$this->deployment_company})";
+                    }
 
                     return "Changed {$applicantName} status in {$batchName} → {$readable}";
                 }
@@ -96,6 +132,7 @@ class ApplicantBatch extends Pivot
             });
     }
 
+    // ─── Relationships ───────────────────────────────────
     public function applicant(): BelongsTo
     {
         return $this->belongsTo(Applicant::class);
@@ -111,6 +148,13 @@ class ApplicantBatch extends Pivot
         return $this->belongsTo(User::class, 'processed_by');
     }
 
+    // 🚀 NEW relationship
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
+    // ─── Scopes ──────────────────────────────────────────
     public function scopeActive(Builder $query): Builder
     {
         return $query->whereNotIn('status', [
@@ -139,6 +183,7 @@ class ApplicantBatch extends Pivot
         return $query->where('applicant_id', $applicantId);
     }
 
+    // ─── Helper methods ──────────────────────────────────
     public function isDeployed(): bool
     {
         return $this->status === ApplicantBatchStatus::DEPLOYED;
@@ -166,5 +211,16 @@ class ApplicantBatch extends Pivot
             ApplicantBatchStatus::WITHDRAWN,
             ApplicantBatchStatus::DEPLOYED,
         ], true);
+    }
+
+    // 🚀 Deployment helpers
+    public function isCancelled(): bool
+    {
+        return $this->cancelled_at !== null;
+    }
+
+    public function hasDeploymentInfo(): bool
+    {
+        return $this->deployment_country !== null || $this->deployment_company !== null;
     }
 }
