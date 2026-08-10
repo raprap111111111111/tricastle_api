@@ -17,3 +17,5 @@ Route::patch('applicant-batches/{applicant_batch}/deploy',             [Applican
 // Convenience listings
 Route::get('applicant-batches/by-applicant/{applicant}', [ApplicantBatchController::class, 'listByApplicant'])->name('applicant-batches.by-applicant');
 Route::get('applicant-batches/by-batch/{batch}',         [ApplicantBatchController::class, 'listByBatch'])->name('applicant-batches.by-batch');
+Route::patch('applicant-batches/{applicantBatch}/return',   [ApplicantBatchController::class, 'markReturned']);
+Route::patch('applicant-batches/{applicantBatch}/complete', [ApplicantBatchController::class, 'markCompleted']);

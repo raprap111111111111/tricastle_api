@@ -27,7 +27,7 @@ class DeployApplicantRequest extends FormRequest
             'contract_end_date'        => ['nullable', 'date', 'after_or_equal:contract_start_date'],
             'monthly_salary'           => ['nullable', 'numeric', 'min:0', 'max:99999999.99'],
             'salary_currency'          => ['nullable', 'string', 'size:3'],
-            'flight_date'              => ['nullable', 'date', 'before_or_equal:deployment_date'],
+            'flight_date'              => ['nullable', 'date'],
             'visa_type'                => ['nullable', 'string', 'max:100'],
             'deployment_notes'         => ['nullable', 'string', 'max:2000'],
         ];
@@ -39,7 +39,6 @@ class DeployApplicantRequest extends FormRequest
             'deployment_country.required' => 'Please specify the deployment country.',
             'deployment_company.required' => 'Please specify the deployment company.',
             'deployment_date.required'    => 'Please specify the deployment date.',
-            'flight_date.before_or_equal' => 'Flight date must be on or before the deployment date.',
             'contract_end_date.after_or_equal' => 'Contract end date must be after the start date.',
         ];
     }

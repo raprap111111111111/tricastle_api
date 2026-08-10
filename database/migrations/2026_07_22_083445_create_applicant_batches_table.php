@@ -19,7 +19,6 @@ return new class extends Migration
 
             // ─── Batch-specific Status ───────────────
             // This is the applicant's journey WITHIN a batch
-            // (only final_list applicants can be assigned here)
             $table->enum('status', [
                 'assigned',              // Just assigned to batch
                 'interview_scheduled',
@@ -35,6 +34,8 @@ return new class extends Migration
                 'rejected',              // Failed in batch process
                 'withdrawn',             // Applicant withdrew
                 'deployed',              // Successfully deployed
+                'returned',              // 🏠 Came home before contract ended
+                'completed',             // ✅ Contract completed successfully
             ])->default('assigned');
 
             // ─── Dates ──────────────────────────────

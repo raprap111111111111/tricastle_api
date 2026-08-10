@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\v1;
 
 use App\Domain\ApplicantBatch\Actions\AcceptApplicantBatchAction;
+use App\Domain\ApplicantBatch\Actions\CompleteApplicantBatchAction;
 use App\Domain\ApplicantBatch\Actions\CreateApplicantBatchAction;
 use App\Domain\ApplicantBatch\Actions\DeleteApplicantBatchAction;
 use App\Domain\ApplicantBatch\Actions\DeployApplicantBatchAction;
 use App\Domain\ApplicantBatch\Actions\RecordExamResultAction;
 use App\Domain\ApplicantBatch\Actions\RejectApplicantBatchAction;
+use App\Domain\ApplicantBatch\Actions\ReturnApplicantBatchAction;
 use App\Domain\ApplicantBatch\Actions\ScheduleInterviewAction;
 use App\Domain\ApplicantBatch\Actions\UpdateApplicantBatchAction;
 use App\Domain\ApplicantBatch\Actions\UpdateApplicantBatchStatusAction;
@@ -16,12 +18,14 @@ use App\Domain\ApplicantBatch\Mappers\ApplicantBatchMapper;
 use App\Domain\ApplicantBatch\Repositories\ApplicantBatchRepository;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\v1\ApplicantBatch\AcceptApplicantBatchRequest;
+use App\Http\Requests\v1\ApplicantBatch\CompleteApplicantBatchRequest;
 use App\Http\Requests\v1\ApplicantBatch\DeleteApplicantBatchRequest;
 use App\Http\Requests\v1\ApplicantBatch\DeployApplicantBatchRequest;
 use App\Http\Requests\v1\ApplicantBatch\GetAllApplicantBatchRequest;
 use App\Http\Requests\v1\ApplicantBatch\GetApplicantBatchRequest;
 use App\Http\Requests\v1\ApplicantBatch\RecordExamResultRequest;
 use App\Http\Requests\v1\ApplicantBatch\RejectApplicantBatchRequest;
+use App\Http\Requests\v1\ApplicantBatch\ReturnApplicantBatchRequest;
 use App\Http\Requests\v1\ApplicantBatch\ScheduleInterviewRequest;
 use App\Http\Requests\v1\ApplicantBatch\StoreApplicantBatchRequest;
 use App\Http\Requests\v1\ApplicantBatch\UpdateApplicantBatchRequest;
@@ -45,6 +49,8 @@ class ApplicantBatchController extends Controller
         private readonly RejectApplicantBatchAction $rejectAction,
         private readonly WithdrawApplicantBatchAction $withdrawAction,
         private readonly DeployApplicantBatchAction $deployAction,
+        private readonly ReturnApplicantBatchAction $returnAction,       // 🆕
+        private readonly CompleteApplicantBatchAction $completeAction,   // 🆕
     ) {}
 
     public function index(GetAllApplicantBatchRequest $request): JsonResponse
@@ -203,6 +209,40 @@ class ApplicantBatchController extends Controller
         $records = $this->repository->findByBatchId($batchId);
 
         return ApplicantBatchResource::collection($records)
+            ->response()
+            ->setStatusCode(200);
+    }
+
+    /**
+     * 🏠 Mark applicant as returned home early (before contract ended)
+     * PATCH /applicant-batches/{applicant_batch}/return
+     */
+    public function markReturned(
+        ReturnApplicantBatchRequest $request,
+        ApplicantBatch $applicantBatch
+    ): JsonResponse {
+        $dto     = ApplicantBatchMapper::fromReturnRequest($request);
+        $updated = $this->returnAction->execute($applicantBatch, $dto);
+
+        return (new ApplicantBatchResource($updated->load(['applicant', 'batch', 'processedBy'])))
+            ->additional(['message' => 'Applicant marked as returned home.'])
+            ->response()
+            ->setStatusCode(200);
+    }
+
+    /**
+     * ✅ Mark contract as completed successfully
+     * PATCH /applicant-batches/{applicant_batch}/complete
+     */
+    public function markCompleted(
+        CompleteApplicantBatchRequest $request,
+        ApplicantBatch $applicantBatch
+    ): JsonResponse {
+        $dto     = ApplicantBatchMapper::fromCompleteRequest($request);
+        $updated = $this->completeAction->execute($applicantBatch, $dto);
+
+        return (new ApplicantBatchResource($updated->load(['applicant', 'batch', 'processedBy'])))
+            ->additional(['message' => 'Contract marked as completed.'])
             ->response()
             ->setStatusCode(200);
     }

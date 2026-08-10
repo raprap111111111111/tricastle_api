@@ -19,6 +19,8 @@ enum ApplicantBatchStatus: string
     case REJECTED            = 'rejected';
     case WITHDRAWN           = 'withdrawn';
     case DEPLOYED            = 'deployed';
+    case RETURNED            = 'returned';   // 🏠 Came home before contract ended
+    case COMPLETED           = 'completed';  // ✅ Contract successfully finished
 
     public function label(): string
     {
@@ -37,6 +39,8 @@ enum ApplicantBatchStatus: string
             self::REJECTED            => 'Rejected',
             self::WITHDRAWN           => 'Withdrawn',
             self::DEPLOYED            => 'Deployed',
+            self::RETURNED            => 'Returned Home',
+            self::COMPLETED           => 'Contract Completed',
         };
     }
 
@@ -57,6 +61,8 @@ enum ApplicantBatchStatus: string
             self::REJECTED            => 'red',
             self::WITHDRAWN           => 'gray',
             self::DEPLOYED            => 'green',
+            self::RETURNED            => 'orange',
+            self::COMPLETED           => 'blue',
         };
     }
 
@@ -71,6 +77,8 @@ enum ApplicantBatchStatus: string
             self::REJECTED,
             self::WITHDRAWN,
             self::DEPLOYED,
+            self::RETURNED,   
+            self::COMPLETED, 
         ]);
     }
 }

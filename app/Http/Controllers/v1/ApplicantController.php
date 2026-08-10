@@ -51,14 +51,14 @@ class ApplicantController extends Controller
     {
         $applicant->load([
             'assignedStaff',
-            'reviewer',                    // ← add
+            'reviewer',
             'creator',
             'lifestyle',
             'educations',
             'employments',
             'tattoos',
-            'applicantBatches.batch',      // ← add (direct relation with batch)
-            'applicantBatches.processedBy', // ← add
+            'applicantBatches.batch',
+            'applicantBatches.processedBy',
         ]);
 
         return $this->responseSuccess(
@@ -66,7 +66,6 @@ class ApplicantController extends Controller
             'Applicant retrieved successfully'
         );
     }
-
     public function store(StoreApplicantRequest $request): JsonResponse
     {
         $applicant = $this->createAction->execute(

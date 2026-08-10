@@ -61,44 +61,53 @@ class ApplicantResource extends JsonResource
             'quality_grade'      => $this->quality_grade,
 
             // ─── Staff Relations ─────────────────────────
-            'assigned_staff'     => $this->whenLoaded('assignedStaff', fn () => [
+            'assigned_staff'     => $this->whenLoaded('assignedStaff', fn() => [
                 'id'        => $this->assignedStaff->id,
                 'full_name' => $this->assignedStaff->full_name ?? $this->assignedStaff->name,
                 'name'      => $this->assignedStaff->full_name ?? $this->assignedStaff->name,
             ]),
 
-            'reviewer'           => $this->whenLoaded('reviewer', fn () => [
+            'reviewer'           => $this->whenLoaded('reviewer', fn() => [
                 'id'        => $this->reviewer->id,
                 'full_name' => $this->reviewer->full_name ?? $this->reviewer->name,
                 'name'      => $this->reviewer->full_name ?? $this->reviewer->name,
             ]),
 
-            'creator'            => $this->whenLoaded('creator', fn () => [
+            'creator'            => $this->whenLoaded('creator', fn() => [
                 'id'        => $this->creator->id,
                 'full_name' => $this->creator->full_name ?? $this->creator->name,
                 'name'      => $this->creator->full_name ?? $this->creator->name,
             ]),
 
             // ─── Sub-models ──────────────────────────────
-            'lifestyle'          => $this->whenLoaded('lifestyle', fn () =>
+            'lifestyle'          => $this->whenLoaded(
+                'lifestyle',
+                fn() =>
                 $this->lifestyle ? new ApplicantLifestyleResource($this->lifestyle) : null
             ),
 
-            'educations'         => $this->whenLoaded('educations', fn () =>
+            'educations'         => $this->whenLoaded(
+                'educations',
+                fn() =>
                 ApplicantEducationResource::collection($this->educations)
             ),
 
-            'employments'        => $this->whenLoaded('employments', fn () =>
+            'employments'        => $this->whenLoaded(
+                'employments',
+                fn() =>
                 ApplicantEmploymentResource::collection($this->employments)
             ),
 
-            'tattoos'            => $this->whenLoaded('tattoos', fn () =>
+            'tattoos'            => $this->whenLoaded(
+                'tattoos',
+                fn() =>
                 ApplicantTattooResource::collection($this->tattoos)
             ),
 
-            // ─── Batches (direct HasMany) ────────────────
-            'applicant_batches'  => $this->whenLoaded('applicantBatches', fn () =>
-                $this->applicantBatches->map(fn ($ab) => [
+            'applicant_batches'  => $this->whenLoaded(
+                'applicantBatches',
+                fn() =>
+                $this->applicantBatches->map(fn($ab) => [
                     'id'               => $ab->id,
                     'applicant_id'     => $ab->applicant_id,
                     'batch_id'         => $ab->batch_id,
@@ -120,18 +129,35 @@ class ApplicantResource extends JsonResource
                         'name'         => $ab->batch->name,
                         'country'      => $ab->batch->country,
                         'status'       => $ab->batch->status,
-                        'is_active'    => (bool) $ab->batch->is_active,   // ← ADD THIS
+                        'is_active'    => (bool) $ab->batch->is_active,
                     ] : null,
                     'processed_by'     => $ab->relationLoaded('processedBy') && $ab->processedBy ? [
                         'id'        => $ab->processedBy->id,
                         'full_name' => $ab->processedBy->full_name ?? $ab->processedBy->name,
                     ] : null,
+
+                    // 🚀 Deployment fields (stored directly on applicant_batches)
+                    'deployment_country'       => $ab->deployment_country,
+                    'deployment_company'       => $ab->deployment_company,
+                    'deployment_position'      => $ab->deployment_position,
+                    'contract_duration_months' => $ab->contract_duration_months,
+                    'contract_start_date'      => $ab->contract_start_date?->format('Y-m-d'),
+                    'contract_end_date'        => $ab->contract_end_date?->format('Y-m-d'),
+                    'monthly_salary'           => $ab->monthly_salary !== null ? (float) $ab->monthly_salary : null,
+                    'salary_currency'          => $ab->salary_currency,
+                    'flight_date'              => $ab->flight_date?->format('Y-m-d'),
+                    'visa_type'                => $ab->visa_type,
+                    'deployment_notes'         => $ab->deployment_notes,
+                    'cancellation_reason'      => $ab->cancellation_reason,
+                    'cancelled_at'             => $ab->cancelled_at?->toIso8601String(),
                 ])
             ),
 
             // ─── Legacy batches pivot (backward compat) ──
-            'batches'            => $this->whenLoaded('batches', fn () =>
-                $this->batches->map(fn ($batch) => [
+            'batches'            => $this->whenLoaded(
+                'batches',
+                fn() =>
+                $this->batches->map(fn($batch) => [
                     'id'            => $batch->id,
                     'batch_code'    => $batch->batch_code ?? null,
                     'name'          => $batch->name,

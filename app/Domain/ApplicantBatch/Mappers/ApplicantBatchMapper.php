@@ -14,6 +14,10 @@ use App\Http\Requests\v1\ApplicantBatch\ScheduleInterviewRequest;
 use App\Http\Requests\v1\ApplicantBatch\StoreApplicantBatchRequest;
 use App\Http\Requests\v1\ApplicantBatch\UpdateApplicantBatchRequest;
 use App\Http\Requests\v1\ApplicantBatch\UpdateApplicantBatchStatusRequest;
+use App\Domain\ApplicantBatch\DTOs\ReturnApplicantBatchDTO;
+use App\Domain\ApplicantBatch\DTOs\CompleteApplicantBatchDTO;
+use App\Http\Requests\v1\ApplicantBatch\ReturnApplicantBatchRequest;
+use App\Http\Requests\v1\ApplicantBatch\CompleteApplicantBatchRequest;
 
 class ApplicantBatchMapper
 {
@@ -21,7 +25,23 @@ class ApplicantBatchMapper
     {
         return new CreateApplicantBatchDTO(
             applicantId: (int) $request->validated('applicant_id'),
-            batchId:     (int) $request->validated('batch_id'),
+            batchId: (int) $request->validated('batch_id'),
+            processedBy: $request->user()?->id,
+        );
+    }
+
+    public static function fromReturnRequest(ReturnApplicantBatchRequest $request): ReturnApplicantBatchDTO
+    {
+        return new ReturnApplicantBatchDTO(
+            returnReason: $request->validated('return_reason'),
+            processedBy: $request->user()?->id,
+        );
+    }
+
+    public static function fromCompleteRequest(CompleteApplicantBatchRequest $request): CompleteApplicantBatchDTO
+    {
+        return new CompleteApplicantBatchDTO(
+            completionNotes: $request->validated('completion_notes'),
             processedBy: $request->user()?->id,
         );
     }
@@ -29,26 +49,26 @@ class ApplicantBatchMapper
     public static function fromUpdateRequest(UpdateApplicantBatchRequest $request): UpdateApplicantBatchDTO
     {
         return new UpdateApplicantBatchDTO(
-            status:          $request->validated('status'),
-            interviewDate:   $request->validated('interview_date'),
-            medicalDate:     $request->validated('medical_date'),
-            examDate:        $request->validated('exam_date'),
-            acceptedAt:      $request->validated('accepted_at'),
-            deployedAt:      $request->validated('deployed_at'),
-            examScore:       $request->validated('exam_score') !== null
-                                ? (float) $request->validated('exam_score')
-                                : null,
-            interviewNotes:  $request->validated('interview_notes'),
-            medicalNotes:    $request->validated('medical_notes'),
+            status: $request->validated('status'),
+            interviewDate: $request->validated('interview_date'),
+            medicalDate: $request->validated('medical_date'),
+            examDate: $request->validated('exam_date'),
+            acceptedAt: $request->validated('accepted_at'),
+            deployedAt: $request->validated('deployed_at'),
+            examScore: $request->validated('exam_score') !== null
+                ? (float) $request->validated('exam_score')
+                : null,
+            interviewNotes: $request->validated('interview_notes'),
+            medicalNotes: $request->validated('medical_notes'),
             rejectionReason: $request->validated('rejection_reason'),
-            processedBy:     $request->user()?->id,
+            processedBy: $request->user()?->id,
         );
     }
 
     public static function fromUpdateStatusRequest(UpdateApplicantBatchStatusRequest $request): UpdateApplicantBatchStatusDTO
     {
         return new UpdateApplicantBatchStatusDTO(
-            status:      $request->validated('status'),
+            status: $request->validated('status'),
             processedBy: $request->user()?->id,
         );
     }
@@ -56,18 +76,18 @@ class ApplicantBatchMapper
     public static function fromScheduleInterviewRequest(ScheduleInterviewRequest $request): ScheduleInterviewDTO
     {
         return new ScheduleInterviewDTO(
-            interviewDate:  $request->validated('interview_date'),
+            interviewDate: $request->validated('interview_date'),
             interviewNotes: $request->validated('interview_notes'),
-            processedBy:    $request->user()?->id,
+            processedBy: $request->user()?->id,
         );
     }
 
     public static function fromRecordExamResultRequest(RecordExamResultRequest $request): RecordExamResultDTO
     {
         return new RecordExamResultDTO(
-            examDate:    $request->validated('exam_date'),
-            examScore:   (float) $request->validated('exam_score'),
-            passed:      (bool) $request->validated('passed'),
+            examDate: $request->validated('exam_date'),
+            examScore: (float) $request->validated('exam_score'),
+            passed: (bool) $request->validated('passed'),
             processedBy: $request->user()?->id,
         );
     }
@@ -76,7 +96,7 @@ class ApplicantBatchMapper
     {
         return new RejectApplicantBatchDTO(
             rejectionReason: $request->validated('rejection_reason'),
-            processedBy:     $request->user()?->id,
+            processedBy: $request->user()?->id,
         );
     }
 }
