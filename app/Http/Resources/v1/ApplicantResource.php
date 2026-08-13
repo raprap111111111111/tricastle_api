@@ -10,10 +10,10 @@ class ApplicantResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id'                 => $this->id,
-            'applicant_code'     => $this->applicant_code,
+            'id'             => $this->id,
+            'applicant_code' => $this->applicant_code,
 
-            // ─── Personal ────────────────────────────────
+            // ─── Personal ─────────────────────────────────────────────────
             'first_name'         => $this->first_name,
             'middle_name'        => $this->middle_name,
             'last_name'          => $this->last_name,
@@ -29,85 +29,152 @@ class ApplicantResource extends JsonResource
             'number_of_children' => $this->number_of_children,
             'nationality'        => $this->nationality,
 
-            // ─── Physical ────────────────────────────────
-            'height_cm'          => $this->height_cm ? (float) $this->height_cm : null,
-            'weight_kg'          => $this->weight_kg ? (float) $this->weight_kg : null,
-            'dominant_hand'      => $this->dominant_hand,
-            'blood_type'         => $this->blood_type,
+            // ─── Physical ─────────────────────────────────────────────────
+            'height_cm'     => $this->height_cm ? (float) $this->height_cm : null,
+            'weight_kg'     => $this->weight_kg ? (float) $this->weight_kg : null,
+            'dominant_hand' => $this->dominant_hand,
+            'blood_type'    => $this->blood_type,
 
-            // ─── Address ─────────────────────────────────
-            'current_address'    => $this->current_address,
-            'permanent_address'  => $this->permanent_address,
-            'city'               => $this->city,
-            'province'           => $this->province,
-            'postal_code'        => $this->postal_code,
+            // ─── Address ──────────────────────────────────────────────────
+            'current_address'   => $this->current_address,
+            'permanent_address' => $this->permanent_address,
+            'city'              => $this->city,
+            'province'          => $this->province,
+            'postal_code'       => $this->postal_code,
 
-            // ─── Passport / IDs ──────────────────────────
-            'passport_number'    => $this->passport_number,
-            'passport_expiry'    => $this->passport_expiry?->format('Y-m-d'),
-            'sss_number'         => $this->sss_number,
-            'tin_number'         => $this->tin_number,
-            'philhealth_number'  => $this->philhealth_number,
-            'pagibig_number'     => $this->pagibig_number,
+            // ─── Passport / IDs ───────────────────────────────────────────
+            'passport_number'   => $this->passport_number,
+            'passport_expiry'   => $this->passport_expiry?->format('Y-m-d'),
+            'sss_number'        => $this->sss_number,
+            'tin_number'        => $this->tin_number,
+            'philhealth_number' => $this->philhealth_number,
+            'pagibig_number'    => $this->pagibig_number,
 
-            // ─── Status ──────────────────────────────────
-            'status'             => $this->status,
-            'rejection_reason'   => $this->rejection_reason,
-            'final_listed_at'    => $this->final_listed_at?->toIso8601String(),
-            'rejected_at'        => $this->rejected_at?->toIso8601String(),
+            // ─── Status ───────────────────────────────────────────────────
+            'status'           => $this->status,
+            'rejection_reason' => $this->rejection_reason,
+            'final_listed_at'  => $this->final_listed_at?->toIso8601String(),
+            'rejected_at'      => $this->rejected_at?->toIso8601String(),
 
-            // ─── Quality ─────────────────────────────────
-            'quality_score'      => (float) $this->quality_score,
-            'quality_grade'      => $this->quality_grade,
+            // ─── Quality ──────────────────────────────────────────────────
+            'quality_score' => (float) $this->quality_score,
+            'quality_grade' => $this->quality_grade,
 
-            // ─── Staff Relations ─────────────────────────
-            'assigned_staff'     => $this->whenLoaded('assignedStaff', fn() => [
+            // ─── Japan Deployment Profile (Phase 1) ───────────────────────
+            'skill_category'      => $this->skill_category,
+            'trade_or_occupation' => $this->trade_or_occupation,
+
+            'language' => [
+                'understands_basic_english' => (bool) $this->understands_basic_english,
+                'jlpt_level'                => $this->jlpt_level,
+            ],
+
+            'deployment' => [
+                'willing_to_be_deployed'    => (bool) $this->willing_to_be_deployed,
+                'japan_deployment_ready'    => (bool) $this->japan_deployment_ready,
+                'preferred_work_location'   => $this->preferred_work_location,
+                'previous_japan_experience' => (bool) $this->previous_japan_experience,
+                'years_japan_experience'    => (int) $this->years_japan_experience,
+                'has_titp_certificate'      => (bool) $this->has_titp_certificate,
+                'titp_occupation'           => $this->titp_occupation,
+                'ssw_eligible'              => (bool) $this->ssw_eligible,
+            ],
+
+            'salary' => [
+                'expected_salary' => $this->expected_salary !== null
+                    ? (float) $this->expected_salary
+                    : null,
+                'expected_salary_currency' => $this->expected_salary_currency,
+                'current_salary' => $this->current_salary !== null
+                    ? (float) $this->current_salary
+                    : null,
+                'current_salary_currency' => $this->current_salary_currency,
+            ],
+
+            'family' => [
+                'father' => [
+                    'name'       => $this->father_name,
+                    'occupation' => $this->father_occupation,
+                    'contact'    => $this->father_contact,
+                ],
+                'mother' => [
+                    'name'       => $this->mother_name,
+                    'occupation' => $this->mother_occupation,
+                    'contact'    => $this->mother_contact,
+                ],
+                'spouse' => [
+                    'name'       => $this->spouse_name,
+                    'occupation' => $this->spouse_occupation,
+                    'contact'    => $this->spouse_contact,
+                ],
+                'emergency_contact' => [
+                    'name'         => $this->emergency_contact_name,
+                    'relationship' => $this->emergency_contact_relationship,
+                    'phone'        => $this->emergency_contact_phone,
+                    'address'      => $this->emergency_contact_address,
+                ],
+            ],
+
+            // ─── Staff Relations ──────────────────────────────────────────
+            'assigned_staff' => $this->whenLoaded('assignedStaff', fn () => [
                 'id'        => $this->assignedStaff->id,
                 'full_name' => $this->assignedStaff->full_name ?? $this->assignedStaff->name,
                 'name'      => $this->assignedStaff->full_name ?? $this->assignedStaff->name,
             ]),
 
-            'reviewer'           => $this->whenLoaded('reviewer', fn() => [
+            'reviewer' => $this->whenLoaded('reviewer', fn () => [
                 'id'        => $this->reviewer->id,
                 'full_name' => $this->reviewer->full_name ?? $this->reviewer->name,
                 'name'      => $this->reviewer->full_name ?? $this->reviewer->name,
             ]),
 
-            'creator'            => $this->whenLoaded('creator', fn() => [
+            'creator' => $this->whenLoaded('creator', fn () => [
                 'id'        => $this->creator->id,
                 'full_name' => $this->creator->full_name ?? $this->creator->name,
                 'name'      => $this->creator->full_name ?? $this->creator->name,
             ]),
 
-            // ─── Sub-models ──────────────────────────────
-            'lifestyle'          => $this->whenLoaded(
+            // ─── Sub-models ───────────────────────────────────────────────
+            'lifestyle' => $this->whenLoaded(
                 'lifestyle',
-                fn() =>
-                $this->lifestyle ? new ApplicantLifestyleResource($this->lifestyle) : null
+                fn () => $this->lifestyle
+                    ? new ApplicantLifestyleResource($this->lifestyle)
+                    : null
             ),
 
-            'educations'         => $this->whenLoaded(
+            'educations' => $this->whenLoaded(
                 'educations',
-                fn() =>
-                ApplicantEducationResource::collection($this->educations)
+                fn () => ApplicantEducationResource::collection($this->educations)
             ),
 
-            'employments'        => $this->whenLoaded(
+            'employments' => $this->whenLoaded(
                 'employments',
-                fn() =>
-                ApplicantEmploymentResource::collection($this->employments)
+                fn () => ApplicantEmploymentResource::collection($this->employments)
             ),
 
-            'tattoos'            => $this->whenLoaded(
+            'tattoos' => $this->whenLoaded(
                 'tattoos',
-                fn() =>
-                ApplicantTattooResource::collection($this->tattoos)
+                fn () => ApplicantTattooResource::collection($this->tattoos)
             ),
 
-            'applicant_batches'  => $this->whenLoaded(
+            // ─── Documents / Biodata ──────────────────────────────────────
+            'documents' => $this->whenLoaded(
+                'currentDocuments',
+                fn () => ApplicantDocumentResource::collection($this->currentDocuments)
+            ),
+
+            'biodata' => $this->whenLoaded('currentDocuments', function () {
+                $doc = $this->currentDocuments->first(
+                    fn ($d) => strtoupper((string) ($d->documentType?->code ?? '')) === 'BIODATA'
+                );
+
+                return $doc ? new ApplicantDocumentResource($doc) : null;
+            }),
+
+            // ─── Applicant Batches ────────────────────────────────────────
+            'applicant_batches' => $this->whenLoaded(
                 'applicantBatches',
-                fn() =>
-                $this->applicantBatches->map(fn($ab) => [
+                fn () => $this->applicantBatches->map(fn ($ab) => [
                     'id'               => $ab->id,
                     'applicant_id'     => $ab->applicant_id,
                     'batch_id'         => $ab->batch_id,
@@ -123,7 +190,8 @@ class ApplicantResource extends JsonResource
                     'medical_notes'    => $ab->medical_notes,
                     'rejection_reason' => $ab->rejection_reason,
                     'remarks'          => $ab->remarks,
-                    'batch'            => $ab->relationLoaded('batch') && $ab->batch ? [
+
+                    'batch' => $ab->relationLoaded('batch') && $ab->batch ? [
                         'id'           => $ab->batch->id,
                         'batch_number' => $ab->batch->batch_number ?? null,
                         'name'         => $ab->batch->name,
@@ -131,12 +199,12 @@ class ApplicantResource extends JsonResource
                         'status'       => $ab->batch->status,
                         'is_active'    => (bool) $ab->batch->is_active,
                     ] : null,
-                    'processed_by'     => $ab->relationLoaded('processedBy') && $ab->processedBy ? [
+
+                    'processed_by' => $ab->relationLoaded('processedBy') && $ab->processedBy ? [
                         'id'        => $ab->processedBy->id,
                         'full_name' => $ab->processedBy->full_name ?? $ab->processedBy->name,
                     ] : null,
 
-                    // 🚀 Deployment fields (stored directly on applicant_batches)
                     'deployment_country'       => $ab->deployment_country,
                     'deployment_company'       => $ab->deployment_company,
                     'deployment_position'      => $ab->deployment_position,
@@ -153,16 +221,15 @@ class ApplicantResource extends JsonResource
                 ])
             ),
 
-            // ─── Legacy batches pivot (backward compat) ──
-            'batches'            => $this->whenLoaded(
+            // ─── Legacy batches pivot (backward compat) ───────────────────
+            'batches' => $this->whenLoaded(
                 'batches',
-                fn() =>
-                $this->batches->map(fn($batch) => [
-                    'id'            => $batch->id,
-                    'batch_code'    => $batch->batch_code ?? null,
-                    'name'          => $batch->name,
-                    'company_name'  => $batch->company?->name,
-                    'pivot'         => [
+                fn () => $this->batches->map(fn ($batch) => [
+                    'id'           => $batch->id,
+                    'batch_code'   => $batch->batch_code ?? null,
+                    'name'         => $batch->name,
+                    'company_name' => $batch->company?->name,
+                    'pivot'        => [
                         'status'         => $batch->pivot->status,
                         'assigned_at'    => $batch->pivot->assigned_at,
                         'interview_date' => $batch->pivot->interview_date,
@@ -171,9 +238,9 @@ class ApplicantResource extends JsonResource
                 ])
             ),
 
-            // ─── Timestamps ──────────────────────────────
-            'created_at'         => $this->created_at?->toIso8601String(),
-            'updated_at'         => $this->updated_at?->toIso8601String(),
+            // ─── Timestamps ───────────────────────────────────────────────
+            'created_at' => $this->created_at?->toIso8601String(),
+            'updated_at' => $this->updated_at?->toIso8601String(),
         ];
     }
 }

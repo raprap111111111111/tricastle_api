@@ -26,16 +26,20 @@ use Illuminate\Http\Request;
 class ApplicantController extends Controller
 {
     public function __construct(
-        private readonly DuplicateDetectionService     $duplicateService,
-        private readonly ListApplicantsAction          $listAction,
-        private readonly GetApplicantAction            $getAction,
-        private readonly CreateApplicantAction         $createAction,
-        private readonly UpdateApplicantAction         $updateAction,
-        private readonly DeleteApplicantAction         $deleteAction,
-        private readonly AssignApplicantAction         $assignAction,
-        private readonly TransferApplicantAction       $transferAction,
-        private readonly UpdateApplicantStatusAction   $updateStatusAction,
+        private readonly DuplicateDetectionService   $duplicateService,
+        private readonly ListApplicantsAction        $listAction,
+        private readonly GetApplicantAction          $getAction,
+        private readonly CreateApplicantAction       $createAction,
+        private readonly UpdateApplicantAction       $updateAction,
+        private readonly DeleteApplicantAction       $deleteAction,
+        private readonly AssignApplicantAction       $assignAction,
+        private readonly TransferApplicantAction     $transferAction,
+        private readonly UpdateApplicantStatusAction $updateStatusAction,
     ) {}
+
+    // ═══════════════════════════════════════════════════════
+    // CRUD
+    // ═══════════════════════════════════════════════════════
 
     public function index(GetAllApplicantRequest $request): JsonResponse
     {
@@ -59,6 +63,7 @@ class ApplicantController extends Controller
             'tattoos',
             'applicantBatches.batch',
             'applicantBatches.processedBy',
+            'currentDocuments.documentType',
         ]);
 
         return $this->responseSuccess(
@@ -66,6 +71,7 @@ class ApplicantController extends Controller
             'Applicant retrieved successfully'
         );
     }
+
     public function store(StoreApplicantRequest $request): JsonResponse
     {
         $applicant = $this->createAction->execute(
@@ -104,7 +110,7 @@ class ApplicantController extends Controller
     // ═══════════════════════════════════════════════════════
 
     /**
-     * Generic status update endpoint.
+     * Generic status update.
      * PATCH /applicants/{id}/status
      */
     public function updateStatus(
@@ -123,7 +129,7 @@ class ApplicantController extends Controller
     }
 
     /**
-     * Move applicant to final list (approved for batch assignment).
+     * Move applicant to final list.
      * PATCH /applicants/{id}/move-to-final-list
      */
     public function moveToFinalList(Request $request, Applicant $applicant): JsonResponse
@@ -140,7 +146,7 @@ class ApplicantController extends Controller
     }
 
     /**
-     * Reject applicant with a reason.
+     * Reject applicant with reason.
      * PATCH /applicants/{id}/reject
      */
     public function reject(RejectApplicantRequest $request, Applicant $applicant): JsonResponse
@@ -203,14 +209,14 @@ class ApplicantController extends Controller
     public function checkDuplicates(Request $request): JsonResponse
     {
         $request->validate([
-            'email'           => 'nullable|email',
-            'first_name'      => 'nullable|string',
-            'middle_name'     => 'nullable|string',
-            'last_name'       => 'nullable|string',
-            'date_of_birth'   => 'nullable|date',
-            'passport_number' => 'nullable|string',
-            'batch_id'        => 'nullable|integer|exists:batches,id',
-            'exclude_id'      => 'nullable|integer',
+            'email'           => ['nullable', 'email'],
+            'first_name'      => ['nullable', 'string'],
+            'middle_name'     => ['nullable', 'string'],
+            'last_name'       => ['nullable', 'string'],
+            'date_of_birth'   => ['nullable', 'date'],
+            'passport_number' => ['nullable', 'string'],
+            'batch_id'        => ['nullable', 'integer', 'exists:batches,id'],
+            'exclude_id'      => ['nullable', 'integer'],
         ]);
 
         $duplicates = $this->duplicateService->check(
@@ -229,7 +235,8 @@ class ApplicantController extends Controller
         return $this->responseSuccess([
             'has_duplicates' => count($duplicates) > 0,
             'has_blockers'   => $this->duplicateService->hasBlockers($duplicates),
+            'has_warnings'   => count($this->duplicateService->getWarnings($duplicates)) > 0,
             'duplicates'     => $duplicates,
-        ], count($duplicates) > 0 ? 'Duplicates found' : 'No duplicates');
+        ], count($duplicates) > 0 ? 'Duplicates found' : 'No duplicates found');
     }
 }

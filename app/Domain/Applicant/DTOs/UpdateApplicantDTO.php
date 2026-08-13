@@ -5,6 +5,7 @@ namespace App\Domain\Applicant\DTOs;
 final readonly class UpdateApplicantDTO
 {
     public function __construct(
+        // ── Personal ──────────────────────────────────────────────────────
         public ?string $firstName        = null,
         public ?string $middleName       = null,
         public ?string $lastName         = null,
@@ -18,17 +19,20 @@ final readonly class UpdateApplicantDTO
         public ?int    $numberOfChildren = null,
         public ?string $nationality      = null,
 
+        // ── Physical ──────────────────────────────────────────────────────
         public ?float  $heightCm         = null,
         public ?float  $weightKg         = null,
         public ?string $dominantHand     = null,
         public ?string $bloodType        = null,
 
+        // ── Address ───────────────────────────────────────────────────────
         public ?string $currentAddress   = null,
         public ?string $permanentAddress = null,
         public ?string $city             = null,
         public ?string $province         = null,
         public ?string $postalCode       = null,
 
+        // ── Passport / IDs ────────────────────────────────────────────────
         public ?string $passportNumber   = null,
         public ?string $passportExpiry   = null,
         public ?string $sssNumber        = null,
@@ -36,16 +40,61 @@ final readonly class UpdateApplicantDTO
         public ?string $philhealthNumber = null,
         public ?string $pagibigNumber    = null,
 
-        // ─── Status ──────────────────────────────────
-        public ?string $status           = null,
-        public ?string $rejectionReason  = null,
+        // ── Skill / Trade ─────────────────────────────────────────────────
+        public ?string $skillCategory           = null,
+        public ?string $tradeOrOccupation       = null,
 
-        // ─── Quality ─────────────────────────────────
-        public ?float  $qualityScore     = null,
-        public ?string $qualityGrade     = null,
+        // ── Language ──────────────────────────────────────────────────────
+        public ?bool   $understandsBasicEnglish = null,
+        public ?string $jlptLevel               = null,
 
-        // ─── Staff ───────────────────────────────────
-        public ?int    $assignedStaffId  = null,
-        public ?int    $reviewedBy       = null,
+        // ── Japan Deployment Readiness ────────────────────────────────────
+        public ?bool   $willingToBeDeployed     = null,
+        public ?bool   $japanDeploymentReady    = null,
+        public ?string $preferredWorkLocation   = null,
+
+        // ── Prior Japan Experience ────────────────────────────────────────
+        public ?bool   $previousJapanExperience = null,
+        public ?int    $yearsJapanExperience    = null,
+
+        // ── TITP / SSW Certifications ─────────────────────────────────────
+        public ?bool   $hasTitpCertificate      = null,
+        public ?string $titpOccupation          = null,
+        public ?bool   $sswEligible             = null,
+
+        // ── Salary ────────────────────────────────────────────────────────
+        public ?float  $expectedSalary          = null,
+        public ?string $expectedSalaryCurrency  = null,
+        public ?float  $currentSalary           = null,
+        public ?string $currentSalaryCurrency   = null,
+
+        // ── Family ────────────────────────────────────────────────────────
+        public ?string $fatherName              = null,
+        public ?string $fatherOccupation        = null,
+        public ?string $fatherContact           = null,
+        public ?string $motherName              = null,
+        public ?string $motherOccupation        = null,
+        public ?string $motherContact           = null,
+        public ?string $spouseName              = null,
+        public ?string $spouseOccupation        = null,
+        public ?string $spouseContact           = null,
+
+        // ── Emergency Contact ─────────────────────────────────────────────
+        public ?string $emergencyContactName         = null,
+        public ?string $emergencyContactRelationship = null,
+        public ?string $emergencyContactPhone        = null,
+        public ?string $emergencyContactAddress      = null,
+
+        // ── Status ────────────────────────────────────────────────────────
+        public ?string $status          = null,
+        public ?string $rejectionReason = null,
+
+        // ── Quality ───────────────────────────────────────────────────────
+        public ?float  $qualityScore    = null,
+        public ?string $qualityGrade    = null,
+
+        // ── Staff ─────────────────────────────────────────────────────────
+        public ?int    $assignedStaffId = null,
+        public ?int    $reviewedBy      = null,
     ) {}
 }
