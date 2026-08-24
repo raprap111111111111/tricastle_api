@@ -13,5 +13,5 @@ COPY . .
 # Install dependencies for production
 RUN composer install --no-dev --optimize-autoloader
 
-# Run migrations, seed database, then start Laravel server
-CMD php artisan migrate --force && php artisan db:seed --force && php artisan serve --host=0.0.0.0 --port=10000
+# Run migrations, generate Passport OAuth keys, seed database, then start Laravel
+CMD php artisan migrate --force && php artisan passport:keys --force && php artisan db:seed --force && php artisan serve --host=0.0.0.0 --port=10000
