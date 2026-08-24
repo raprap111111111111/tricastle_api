@@ -2,23 +2,24 @@
 
 return [
 
-    'paths' => ['api/*', 'sanctum/csrf-cookie', 'oauth/*'],
+    'paths' => ['*'],
 
     'allowed_methods' => ['*'],
 
-    // ✅ Explicit origins (safe for dev)
     'allowed_origins' => [
-        'http://localhost:3000',   // ← ADD THIS
-        'http://127.0.0.1:3000',   // ← ADD THIS
+        'https://tricastle-web-psi.vercel.app',
+        'https://tricastle-web.vercel.app',
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
         'http://localhost:5173',
         'http://localhost:5174',
         'http://localhost:5175',
         'http://127.0.0.1:5173',
-        'http://127.0.0.1:5174',
-        'http://127.0.0.1:5175',
     ],
 
-    'allowed_origins_patterns' => [],
+    'allowed_origins_patterns' => [
+        '#^https://.*\.vercel\.app$#',
+    ],
 
     'allowed_headers' => ['*'],
 
@@ -26,6 +27,6 @@ return [
 
     'max_age' => 0,
 
-    'supports_credentials' => false,
+    'supports_credentials' => true,
 
 ];
