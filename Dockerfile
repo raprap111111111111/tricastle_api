@@ -13,5 +13,5 @@ COPY . .
 # Install dependencies for production
 RUN composer install --no-dev --optimize-autoloader
 
-# Run database migrations on boot, then start Laravel on port 10000
-CMD php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=10000
+# Run migrations, seed database, then start Laravel server
+CMD php artisan migrate --force && php artisan db:seed --force && php artisan serve --host=0.0.0.0 --port=10000
