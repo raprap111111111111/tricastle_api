@@ -450,4 +450,107 @@ class DashboardRepository implements DashboardRepositoryInterface
             default                => 'pi pi-info-circle',
         };
     }
+
+    // ─── NEW: Birthdays ───────────────────────────────
+    public function getBirthdays(): array
+    {
+        $today = Carbon::today();
+
+        $mapPerson = function (object $row) use ($today): array {
+            $dob = Carbon::parse($row->date_of_birth)->startOfDay();
+
+            // Next birthday from today
+            $next = $dob->copy()->year($today->year);
+            if ($next->lt($today)) {
+                $next->addYear();
+            }
+
+            $daysLeft = (int) $today->diffInDays($next, false);
+            $turningAge = (int) ($next->year - $dob->year);
+
+            return [
+                'id'             => (int) $row->id,
+                'name'           => trim((string) ($row->name ?? '')),
+                'date_of_birth'  => $dob->format('Y-m-d'),
+                'age'            => $turningAge,
+                'days_left'      => $daysLeft,
+                'is_today'       => $daysLeft === 0,
+                'formatted_date' => $next->format('M j'),
+            ];
+        };
+
+        // ── Applicants ──────────────────────────────────
+        $applicants = [];
+        if (Schema::hasTable('applicants') && Schema::hasColumn('applicants', 'date_of_birth')) {
+            if (Schema::hasColumn('applicants', 'first_name')) {
+                $last = Schema::hasColumn('applicants', 'last_name')
+                    ? ", ' ', COALESCE(last_name,'')"
+                    : '';
+                $nameExpr = "TRIM(CONCAT(COALESCE(first_name,''){$last}))";
+            } elseif (Schema::hasColumn('applicants', 'name')) {
+                $nameExpr = 'name';
+            } else {
+                $nameExpr = "CONCAT('Applicant #', id)";
+            }
+
+            $rows = DB::table('applicants')
+                ->whereNotNull('date_of_birth')
+                ->select([
+                    'id',
+                    'date_of_birth',
+                    DB::raw("{$nameExpr} as name"),
+                ])
+                ->get();
+
+            $applicants = $rows->map($mapPerson)->values()->all();
+        }
+
+        // ── Staff ───────────────────────────────────────
+        $staff = [];
+        if (Schema::hasTable('users') && Schema::hasColumn('users', 'date_of_birth')) {
+            $query = DB::table('users')->whereNotNull('date_of_birth');
+
+            // Optional: only staff-like roles
+            if (Schema::hasTable('model_has_roles') && Schema::hasTable('roles')) {
+                $query->whereIn('users.id', function ($q) {
+                    $q->select('model_id')
+                        ->from('model_has_roles')
+                        ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
+                        ->where('model_type', 'App\\Models\\User')
+                        ->whereIn('roles.name', ['admin', 'staff', 'super_admin', 'manager']);
+                });
+            }
+
+            // Build name from real columns (users has no plain `name` in your DB)
+            if (Schema::hasColumn('users', 'name')) {
+                $nameExpr = 'name';
+            } elseif (Schema::hasColumn('users', 'first_name')) {
+                $last = Schema::hasColumn('users', 'last_name')
+                    ? ", ' ', COALESCE(last_name,'')"
+                    : '';
+                $nameExpr = "TRIM(CONCAT(COALESCE(first_name,''){$last}))";
+            } elseif (Schema::hasColumn('users', 'full_name')) {
+                $nameExpr = 'full_name';
+            } else {
+                $nameExpr = "CONCAT('User #', id)";
+            }
+
+            $rows = $query->select([
+                'id',
+                'date_of_birth',
+                DB::raw("{$nameExpr} as name"),
+            ])->get();
+
+            $staff = $rows->map($mapPerson)->values()->all();
+        }
+
+        // Sort by soonest birthday
+        usort($applicants, fn($a, $b) => $a['days_left'] <=> $b['days_left']);
+        usort($staff, fn($a, $b) => $a['days_left'] <=> $b['days_left']);
+
+        return [
+            'applicants' => $applicants,
+            'staff'      => $staff,
+        ];
+    }
 }

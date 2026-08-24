@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Log;
 class CreateApplicantAction
 {
     use LogsActivity;
-    use HasNotifications;   // 🔔 One-line setup
+    use HasNotifications;
 
     public function __construct(
         private readonly ApplicantRepository       $repository,
@@ -26,7 +26,7 @@ class CreateApplicantAction
     {
         $applicant = DB::transaction(function () use ($dto) {
 
-            // ── 1. Duplicate detection ──────────────────────
+            // ── 1. Duplicate detection ──────────────────────────────────────
             $duplicates = $this->duplicateService->check(
                 data: [
                     'email'           => $dto->email,
@@ -52,11 +52,9 @@ class CreateApplicantAction
                 );
             }
 
-            // ── 2. Create applicant (always starts as pending) ──
-            // Replace the repository->create([...]) block inside execute()
-
+            // ── 2. Create main Applicant record ──────────────────────────────
             $applicant = $this->repository->create([
-                // ── Personal ──────────────────────────────────────────────────────
+                // ── Personal & Identity ──────────────────────────────────────
                 'first_name'         => $dto->firstName,
                 'middle_name'        => $dto->middleName,
                 'last_name'          => $dto->lastName,
@@ -70,20 +68,28 @@ class CreateApplicantAction
                 'number_of_children' => $dto->numberOfChildren,
                 'nationality'        => $dto->nationality,
 
-                // ── Physical ──────────────────────────────────────────────────────
+                // ── AIS / Trade Test ─────────────────────────────────────────
+                'applied_position'        => $dto->appliedPosition,
+                'trade_test_try'          => $dto->tradeTestTry,
+                'trade_test_date'         => $dto->tradeTestDate,
+                'birthplace'              => $dto->birthplace,
+                'religion'                => $dto->religion,
+                'english_proficiency_pct' => $dto->englishProficiencyPct,
+
+                // ── Physical ─────────────────────────────────────────────────
                 'height_cm'          => $dto->heightCm,
                 'weight_kg'          => $dto->weightKg,
                 'dominant_hand'      => $dto->dominantHand,
                 'blood_type'         => $dto->bloodType,
 
-                // ── Address ───────────────────────────────────────────────────────
+                // ── Address ──────────────────────────────────────────────────
                 'current_address'    => $dto->currentAddress,
                 'permanent_address'  => $dto->permanentAddress,
                 'city'               => $dto->city,
                 'province'           => $dto->province,
                 'postal_code'        => $dto->postalCode,
 
-                // ── Passport / IDs ────────────────────────────────────────────────
+                // ── Passport / IDs ───────────────────────────────────────────
                 'passport_number'    => $dto->passportNumber,
                 'passport_expiry'    => $dto->passportExpiry,
                 'sss_number'         => $dto->sssNumber,
@@ -91,56 +97,65 @@ class CreateApplicantAction
                 'philhealth_number'  => $dto->philhealthNumber,
                 'pagibig_number'     => $dto->pagibigNumber,
 
-                // ── Skill / Trade ─────────────────────────────────────────────────
-                'skill_category'             => $dto->skillCategory,
-                'trade_or_occupation'        => $dto->tradeOrOccupation,
+                // ── Skill / Trade & Language ─────────────────────────────────
+                'skill_category'            => $dto->skillCategory,
+                'trade_or_occupation'       => $dto->tradeOrOccupation,
+                'understands_basic_english' => $dto->understandsBasicEnglish,
+                'jlpt_level'                => $dto->jlptLevel,
 
-                // ── Language ──────────────────────────────────────────────────────
-                'understands_basic_english'  => $dto->understandsBasicEnglish,
-                'jlpt_level'                 => $dto->jlptLevel,
+                // ── Japan Deployment Readiness ───────────────────────────────
+                'willing_to_be_deployed'    => $dto->willingToBeDeployed,
+                'japan_deployment_ready'    => $dto->japanDeploymentReady,
+                'preferred_work_location'   => $dto->preferredWorkLocation,
+                'previous_japan_experience' => $dto->previousJapanExperience,
+                'years_japan_experience'    => $dto->yearsJapanExperience,
+                'has_titp_certificate'      => $dto->hasTitpCertificate,
+                'titp_occupation'           => $dto->titpOccupation,
+                'ssw_eligible'              => $dto->sswEligible,
 
-                // ── Japan Deployment ──────────────────────────────────────────────
-                'willing_to_be_deployed'     => $dto->willingToBeDeployed,
-                'japan_deployment_ready'     => $dto->japanDeploymentReady,
-                'preferred_work_location'    => $dto->preferredWorkLocation,
+                // ── Salary ───────────────────────────────────────────────────
+                'expected_salary'           => $dto->expectedSalary,
+                'expected_salary_currency'  => $dto->expectedSalaryCurrency,
+                'current_salary'            => $dto->currentSalary,
+                'current_salary_currency'   => $dto->currentSalaryCurrency,
 
-                // ── Japan Experience ──────────────────────────────────────────────
-                'previous_japan_experience'  => $dto->previousJapanExperience,
-                'years_japan_experience'     => $dto->yearsJapanExperience,
+                // ── Legacy Family (Main Table) ───────────────────────────────
+                'father_name'               => $dto->fatherName,
+                'father_occupation'         => $dto->fatherOccupation,
+                'father_contact'            => $dto->fatherContact,
+                'mother_name'               => $dto->motherName,
+                'mother_occupation'         => $dto->motherOccupation,
+                'mother_contact'            => $dto->motherContact,
+                'spouse_name'               => $dto->spouseName,
+                'spouse_occupation'         => $dto->spouseOccupation,
+                'spouse_contact'            => $dto->spouseContact,
 
-                // ── Certifications ────────────────────────────────────────────────
-                'has_titp_certificate'       => $dto->hasTitpCertificate,
-                'titp_occupation'            => $dto->titpOccupation,
-                'ssw_eligible'               => $dto->sswEligible,
-
-                // ── Salary ────────────────────────────────────────────────────────
-                'expected_salary'            => $dto->expectedSalary,
-                'expected_salary_currency'   => $dto->expectedSalaryCurrency,
-                'current_salary'             => $dto->currentSalary,
-                'current_salary_currency'    => $dto->currentSalaryCurrency,
-
-                // ── Family ────────────────────────────────────────────────────────
-                'father_name'                => $dto->fatherName,
-                'father_occupation'          => $dto->fatherOccupation,
-                'father_contact'             => $dto->fatherContact,
-                'mother_name'                => $dto->motherName,
-                'mother_occupation'          => $dto->motherOccupation,
-                'mother_contact'             => $dto->motherContact,
-                'spouse_name'                => $dto->spouseName,
-                'spouse_occupation'          => $dto->spouseOccupation,
-                'spouse_contact'             => $dto->spouseContact,
-
-                // ── Emergency Contact ─────────────────────────────────────────────
+                // ── Emergency Contact ────────────────────────────────────────
                 'emergency_contact_name'         => $dto->emergencyContactName,
                 'emergency_contact_relationship' => $dto->emergencyContactRelationship,
                 'emergency_contact_phone'        => $dto->emergencyContactPhone,
                 'emergency_contact_address'      => $dto->emergencyContactAddress,
 
-                // ── Staff / Meta ──────────────────────────────────────────────────
-                'assigned_staff_id'  => $dto->assignedStaffId,
-                'created_by'         => $dto->createdBy,
-                'status'             => 'pending',
+                // ── Meta & Assignment ────────────────────────────────────────
+                'assigned_staff_id' => $dto->assignedStaffId,
+                'created_by'        => $dto->createdBy,
+                'status'            => 'pending',
             ]);
+
+            // ── 3. Create Relational Family Record ───────────────────────────
+            $applicant->family()->create([
+                'spouse_name'        => $dto->spouseName,
+                'spouse_occupation'  => $dto->spouseOccupation,
+                'spouse_salary'      => $dto->spouseSalary,
+                'spouse_salary_unit' => $dto->spouseSalaryUnit ?? 'per_month',
+                'father_name'        => $dto->fatherName,
+                'mother_name'        => $dto->motherName,
+            ]);
+
+            // ── 4. Create Japan Contacts (if present) ────────────────────────
+            if (!empty($dto->japanContacts)) {
+                $applicant->japanContacts()->createMany($dto->japanContacts);
+            }
 
             Log::info('Applicant created', [
                 'applicant_id' => $applicant->id,
@@ -151,11 +166,10 @@ class CreateApplicantAction
             return $applicant;
         });
 
-        // 🔔 Notifications AFTER transaction commits
+        // ── 5. Notifications (Dispatched after DB transaction) ───────────────
         $name = "{$applicant->first_name} {$applicant->last_name}";
         $code = $applicant->applicant_code;
 
-        // Notify staff who can view applicants
         $this->notifyStaff(
             permissions: 'applicant.viewAny',
             title: '👤 New Applicant Registered',
@@ -164,7 +178,6 @@ class CreateApplicantAction
             actionUrl: "/applicants/{$applicant->id}",
         );
 
-        // Personal notification to assigned staff
         if ($dto->assignedStaffId && $dto->assignedStaffId !== $dto->createdBy) {
             $this->notifyUser(
                 user: $dto->assignedStaffId,

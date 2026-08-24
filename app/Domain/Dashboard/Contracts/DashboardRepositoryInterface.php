@@ -60,4 +60,14 @@ interface DashboardRepositoryInterface
      * @return array{expiring_documents: int, pending_corrections: int, verification_mismatches: int, incomplete_applications: int}
      */
     public function getAttention(): array;
+
+    /**
+     * Upcoming birthdays for applicants and staff.
+     *
+     * @return array{
+     *   applicants: list<array<string, mixed>>,
+     *   staff: list<array<string, mixed>>
+     * }
+     */
+    public function getBirthdays(): array;
 }

@@ -13,6 +13,14 @@ class ApplicantResource extends JsonResource
             'id'             => $this->id,
             'applicant_code' => $this->applicant_code,
 
+            // ─── AIS / Trade Test (NEW) ───────────────────────────────────
+            'applied_position'        => $this->applied_position,
+            'trade_test_try'          => $this->trade_test_try,
+            'trade_test_date'         => $this->trade_test_date?->format('Y-m-d'),
+            'birthplace'              => $this->birthplace,
+            'religion'                => $this->religion,
+            'english_proficiency_pct' => (int) ($this->english_proficiency_pct ?? 0),
+
             // ─── Personal ─────────────────────────────────────────────────
             'first_name'         => $this->first_name,
             'middle_name'        => $this->middle_name,
@@ -91,21 +99,24 @@ class ApplicantResource extends JsonResource
                 'current_salary_currency' => $this->current_salary_currency,
             ],
 
+            // ─── Family Details (Updated with relational fallback) ────────
             'family' => [
                 'father' => [
-                    'name'       => $this->father_name,
+                    'name'       => $this->family?->father_name ?? $this->father_name,
                     'occupation' => $this->father_occupation,
                     'contact'    => $this->father_contact,
                 ],
                 'mother' => [
-                    'name'       => $this->mother_name,
+                    'name'       => $this->family?->mother_name ?? $this->mother_name,
                     'occupation' => $this->mother_occupation,
                     'contact'    => $this->mother_contact,
                 ],
                 'spouse' => [
-                    'name'       => $this->spouse_name,
-                    'occupation' => $this->spouse_occupation,
-                    'contact'    => $this->spouse_contact,
+                    'name'        => $this->family?->spouse_name ?? $this->spouse_name,
+                    'occupation'  => $this->family?->spouse_occupation ?? $this->spouse_occupation,
+                    'contact'     => $this->spouse_contact,
+                    'salary'      => $this->family?->spouse_salary !== null ? (float) $this->family->spouse_salary : null,
+                    'salary_unit' => $this->family?->spouse_salary_unit,
                 ],
                 'emergency_contact' => [
                     'name'         => $this->emergency_contact_name,
@@ -114,6 +125,12 @@ class ApplicantResource extends JsonResource
                     'address'      => $this->emergency_contact_address,
                 ],
             ],
+
+            // ─── Japan Contacts (NEW) ─────────────────────────────────────
+            'japan_contacts' => $this->whenLoaded(
+                'japanContacts',
+                fn () => ApplicantJapanContactResource::collection($this->japanContacts)
+            ),
 
             // ─── Staff Relations ──────────────────────────────────────────
             'assigned_staff' => $this->whenLoaded('assignedStaff', fn () => [

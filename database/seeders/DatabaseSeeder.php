@@ -21,7 +21,9 @@ class DatabaseSeeder extends Seeder
             UsersSeeder::class,     
             ApplicantSeeder::class,
             DocumentTypeSeeder::class,
-            ThemeSettingsSeeder::class
+            ThemeSettingsSeeder::class,
+            LegacyApplicantsSeeder::class,
+
         ]);
 
         $this->command->info('');

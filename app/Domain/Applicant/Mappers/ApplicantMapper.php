@@ -30,6 +30,14 @@ class ApplicantMapper
             numberOfChildren: $request->validated('number_of_children') ?? 0,
             nationality:      $request->validated('nationality') ?? 'Filipino',
 
+            // ── AIS / Trade Test (NEW) ────────────────────────────────────
+            appliedPosition:       $request->validated('applied_position'),
+            tradeTestTry:          $request->validated('trade_test_try'),
+            tradeTestDate:         $request->validated('trade_test_date'),
+            birthplace:            $request->validated('birthplace'),
+            religion:              $request->validated('religion'),
+            englishProficiencyPct: (int) ($request->validated('english_proficiency_pct') ?? 0),
+
             // ── Physical ──────────────────────────────────────────────────
             heightCm:         $request->validated('height_cm'),
             weightKg:         $request->validated('weight_kg'),
@@ -89,6 +97,11 @@ class ApplicantMapper
             spouseName:              $request->validated('spouse_name'),
             spouseOccupation:        $request->validated('spouse_occupation'),
             spouseContact:           $request->validated('spouse_contact'),
+            spouseSalary:            $request->validated('spouse_salary'),
+            spouseSalaryUnit:        $request->validated('spouse_salary_unit') ?? 'per_month',
+
+            // ── Japan Contacts ────────────────────────────────────────────
+            japanContacts:           $request->validated('japan_contacts') ?? [],
 
             // ── Emergency Contact ─────────────────────────────────────────
             emergencyContactName:         $request->validated('emergency_contact_name'),
@@ -118,6 +131,16 @@ class ApplicantMapper
             civilStatus:      $request->validated('civil_status'),
             numberOfChildren: $request->validated('number_of_children'),
             nationality:      $request->validated('nationality'),
+
+            // ── AIS / Trade Test (NEW) ────────────────────────────────────
+            appliedPosition:       $request->validated('applied_position'),
+            tradeTestTry:          $request->validated('trade_test_try'),
+            tradeTestDate:         $request->validated('trade_test_date'),
+            birthplace:            $request->validated('birthplace'),
+            religion:              $request->validated('religion'),
+            englishProficiencyPct: $request->hasInput('english_proficiency_pct') 
+                                     ? (int) $request->validated('english_proficiency_pct') 
+                                     : null,
 
             // ── Physical ──────────────────────────────────────────────────
             heightCm:         $request->validated('height_cm'),
@@ -192,6 +215,11 @@ class ApplicantMapper
             spouseName:              $request->validated('spouse_name'),
             spouseOccupation:        $request->validated('spouse_occupation'),
             spouseContact:           $request->validated('spouse_contact'),
+            spouseSalary:            $request->validated('spouse_salary'),
+            spouseSalaryUnit:        $request->validated('spouse_salary_unit'),
+
+            // ── Japan Contacts ────────────────────────────────────────────
+            japanContacts:           $request->validated('japan_contacts'),
 
             // ── Emergency Contact ─────────────────────────────────────────
             emergencyContactName:         $request->validated('emergency_contact_name'),
@@ -212,8 +240,6 @@ class ApplicantMapper
             reviewedBy:      $request->user()?->id,
         );
     }
-
-    // ── Status-only mappers (unchanged) ───────────────────────────────────
 
     public static function fromUpdateStatusRequest(UpdateApplicantStatusRequest $request): UpdateStatusDTO
     {

@@ -24,12 +24,20 @@ class StoreApplicantRequest extends FormRequest
             'phone'              => ['nullable', 'string', 'max:30'],
             'mobile'             => ['nullable', 'string', 'max:30'],
             'date_of_birth'      => ['nullable', 'date', 'before:today'],
+            'birthplace'         => ['nullable', 'string', 'max:150'],
             'gender'             => ['nullable', Rule::in(['male', 'female'])],
             'civil_status'       => ['nullable', Rule::in([
                 'single', 'married', 'widowed', 'separated', 'divorced',
             ])],
+            'religion'           => ['nullable', 'string', 'max:100'],
             'number_of_children' => ['nullable', 'integer', 'min:0', 'max:20'],
             'nationality'        => ['nullable', 'string', 'max:60'],
+            'english_proficiency_pct' => ['nullable', 'integer', 'min:0', 'max:100'],
+
+            // ── AIS / Trade Test ──────────────────────────────────────────
+            'applied_position'   => ['nullable', 'string', 'max:100'],
+            'trade_test_try'     => ['nullable', 'string', 'max:20'],
+            'trade_test_date'    => ['nullable', 'date'],
 
             // ── Physical ──────────────────────────────────────────────────
             'height_cm'    => ['nullable', 'numeric', 'min:50',  'max:250'],
@@ -90,16 +98,27 @@ class StoreApplicantRequest extends FormRequest
             'current_salary'           => ['nullable', 'numeric', 'min:0'],
             'current_salary_currency'  => ['nullable', 'string', 'size:3'],
 
-            // ── Family (Phase 1) ──────────────────────────────────────────
-            'father_name'       => ['nullable', 'string', 'max:150'],
-            'father_occupation' => ['nullable', 'string', 'max:100'],
-            'father_contact'    => ['nullable', 'string', 'max:30'],
-            'mother_name'       => ['nullable', 'string', 'max:150'],
-            'mother_occupation' => ['nullable', 'string', 'max:100'],
-            'mother_contact'    => ['nullable', 'string', 'max:30'],
-            'spouse_name'       => ['nullable', 'string', 'max:150'],
-            'spouse_occupation' => ['nullable', 'string', 'max:100'],
-            'spouse_contact'    => ['nullable', 'string', 'max:30'],
+            // ── Family (Phase 1 + AIS) ────────────────────────────────────
+            'father_name'        => ['nullable', 'string', 'max:150'],
+            'father_occupation'  => ['nullable', 'string', 'max:100'],
+            'father_contact'     => ['nullable', 'string', 'max:30'],
+            'mother_name'        => ['nullable', 'string', 'max:150'],
+            'mother_occupation'  => ['nullable', 'string', 'max:100'],
+            'mother_contact'     => ['nullable', 'string', 'max:30'],
+            'spouse_name'        => ['nullable', 'string', 'max:150'],
+            'spouse_occupation'  => ['nullable', 'string', 'max:100'],
+            'spouse_contact'     => ['nullable', 'string', 'max:30'],
+            'spouse_salary'      => ['nullable', 'numeric', 'min:0'],
+            'spouse_salary_unit' => ['nullable', Rule::in(['per_day', 'per_month', 'per_year'])],
+
+            // ── Japan Contacts ────────────────────────────────────────────
+            'japan_contacts'                     => ['nullable', 'array'],
+            'japan_contacts.*.affiliation_type'  => ['required_with:japan_contacts', Rule::in(['marucon', 'non_marucon'])],
+            'japan_contacts.*.name'              => ['required_with:japan_contacts', 'string', 'max:150'],
+            'japan_contacts.*.batch_no'          => ['nullable', 'string', 'max:50'],
+            'japan_contacts.*.company_name'      => ['nullable', 'string', 'max:150'],
+            'japan_contacts.*.relation'          => ['nullable', 'string', 'max:100'],
+            'japan_contacts.*.contact_number'    => ['nullable', 'string', 'max:30'],
 
             // ── Emergency Contact (Phase 1) ───────────────────────────────
             'emergency_contact_name'         => ['nullable', 'string', 'max:150'],

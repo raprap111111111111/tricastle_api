@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use App\Domain\ApplicantEducation\Enums\EducationLevel;
-use App\Domain\ApplicantEducation\Enums\EducationStatus;
+use App\Enums\EducationLevel;
+use App\Enums\EducationStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -23,6 +23,7 @@ class ApplicantEducation extends Model
         'year_started',
         'year_ended',
         'honors',
+        'remarks',
     ];
 
     protected $casts = [

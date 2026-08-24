@@ -19,8 +19,11 @@ class Applicant extends Model
     use HasFactory, SoftDeletes, LogsActivity;
 
     protected $fillable = [
-        // ── Identity ──────────────────────────────────────────────────────
+        // ── Identity & Trade ──────────────────────────────────────────────
         'applicant_code',
+        'applied_position',       
+        'trade_test_try',         
+        'trade_test_date',        
         'first_name',
         'middle_name',
         'last_name',
@@ -29,10 +32,13 @@ class Applicant extends Model
         'phone',
         'mobile',
         'date_of_birth',
+        'birthplace',             
         'gender',
         'civil_status',
+        'religion',               
         'number_of_children',
         'nationality',
+        'english_proficiency_pct',
 
         // ── Physical ──────────────────────────────────────────────────────
         'height_cm',
@@ -56,16 +62,16 @@ class Applicant extends Model
         'pagibig_number',
 
         // ── Skill / Trade (Phase 1) ───────────────────────────────────────
-        'skill_category',           // skilled | semi_skilled | unskilled
-        'trade_or_occupation',      // e.g. "Formwork Carpenter", "Steel Fixer"
+        'skill_category',           
+        'trade_or_occupation',      
 
         // ── Language (Phase 1) ────────────────────────────────────────────
         'understands_basic_english',
-        'jlpt_level',               // N5 | N4 | N3 | N2 | N1
+        'jlpt_level',               
 
         // ── Japan Deployment Readiness (Phase 1) ──────────────────────────
         'willing_to_be_deployed',
-        'japan_deployment_ready',   // staff-set after docs/medical cleared
+        'japan_deployment_ready',   
         'preferred_work_location',
 
         // ── Prior Japan Experience (Phase 1) ──────────────────────────────
@@ -83,7 +89,7 @@ class Applicant extends Model
         'current_salary',
         'current_salary_currency',
 
-        // ── Family (Phase 1) ──────────────────────────────────────────────
+        // ── Family (Legacy / Phase 1) ─────────────────────────────────────
         'father_name',
         'father_occupation',
         'father_contact',
@@ -116,6 +122,7 @@ class Applicant extends Model
         'created_by',
     ];
 
+    // ✅ UPDATE 1: Added currentDocuments.documentType to avoid N+1 query performance issues
     protected $with = [
         'assignedStaff',
         'creator',
@@ -123,23 +130,26 @@ class Applicant extends Model
         'educations',
         'employments',
         'tattoos',
+        'currentDocuments.documentType' 
     ];
 
     protected $casts = [
         // ── Dates ─────────────────────────────────────────────────────────
         'date_of_birth'   => 'date',
+        'trade_test_date' => 'date',     
         'passport_expiry' => 'date',
         'final_listed_at' => 'datetime',
         'rejected_at'     => 'datetime',
 
         // ── Numerics ──────────────────────────────────────────────────────
-        'number_of_children'    => 'integer',
-        'height_cm'             => 'decimal:2',
-        'weight_kg'             => 'decimal:2',
-        'quality_score'         => 'decimal:2',
-        'expected_salary'       => 'decimal:2',
-        'current_salary'        => 'decimal:2',
-        'years_japan_experience'=> 'integer',
+        'number_of_children'      => 'integer',
+        'english_proficiency_pct' => 'integer',  
+        'height_cm'               => 'decimal:2',
+        'weight_kg'               => 'decimal:2',
+        'quality_score'           => 'decimal:2',
+        'expected_salary'         => 'decimal:2',
+        'current_salary'          => 'decimal:2',
+        'years_japan_experience'  => 'integer',
 
         // ── Booleans (Phase 1) ────────────────────────────────────────────
         'understands_basic_english'  => 'boolean',
@@ -153,7 +163,8 @@ class Applicant extends Model
         'status' => ApplicantStatus::class,
     ];
 
-    protected $appends = ['full_name', 'age'];
+    // ✅ UPDATE 2: Added 'photo_url' to the appends array
+    protected $appends = ['full_name', 'age', 'photo_url'];
 
     // ═══════════════════════════════════════════════════════
     // Spatie Activity Log
@@ -291,9 +302,37 @@ class Applicant extends Model
         );
     }
 
+    // ✅ UPDATE 3: Added the photoUrl accessor logic
+    protected function photoUrl(): Attribute
+    {
+        return Attribute::make(
+            get: function () {
+                // Find current document under ID_PHOTO document type
+                $idPhotoDoc = $this->currentDocuments
+                    ?->first(fn($doc) => $doc->documentType?->code === 'ID_PHOTO');
+
+                if ($idPhotoDoc && $idPhotoDoc->file_path) {
+                    return asset('storage/' . ltrim($idPhotoDoc->file_path, '/'));
+                }
+
+                return null;
+            }
+        );
+    }
+
     // ═══════════════════════════════════════════════════════
     // Relationships
     // ═══════════════════════════════════════════════════════
+
+    public function family(): HasOne
+    {
+        return $this->hasOne(ApplicantFamily::class);
+    }
+
+    public function japanContacts(): HasMany
+    {
+        return $this->hasMany(ApplicantJapanContact::class);
+    }
 
     public function assignedStaff(): BelongsTo
     {
@@ -408,8 +447,6 @@ class Applicant extends Model
     {
         return $query->where('assigned_staff_id', $staffId);
     }
-
-    // ── Phase 1 scopes ────────────────────────────────────────────────────
 
     public function scopeWillingToBeDeployed($query)
     {

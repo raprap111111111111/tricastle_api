@@ -229,4 +229,8 @@ class DashboardService
             trend: $trend,
         );
     }
+    public function getBirthdays(): array
+    {
+        return $this->repository->getBirthdays();
+    }
 }

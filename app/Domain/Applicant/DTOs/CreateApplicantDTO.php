@@ -20,6 +20,14 @@ final readonly class CreateApplicantDTO
         public ?string $civilStatus       = null,
         public ?int    $numberOfChildren  = 0,
         public ?string $nationality       = 'Filipino',
+        
+        // ── AIS / Trade Test (NEW) ────────────────────────────────────────
+        public ?string $appliedPosition       = null,
+        public ?string $tradeTestTry          = null,
+        public ?string $tradeTestDate         = null,
+        public ?string $birthplace            = null,
+        public ?string $religion              = null,
+        public int     $englishProficiencyPct = 0,
 
         // ── Physical ──────────────────────────────────────────────────────
         public ?float  $heightCm          = null,
@@ -43,12 +51,12 @@ final readonly class CreateApplicantDTO
         public ?string $pagibigNumber     = null,
 
         // ── Skill / Trade ─────────────────────────────────────────────────
-        public ?string $skillCategory            = null,  // skilled|semi_skilled|unskilled
-        public ?string $tradeOrOccupation        = null,  // e.g. "Formwork Carpenter"
+        public ?string $skillCategory            = null,
+        public ?string $tradeOrOccupation        = null,
 
         // ── Language ──────────────────────────────────────────────────────
         public bool    $understandsBasicEnglish  = false,
-        public ?string $jlptLevel                = null,  // N5|N4|N3|N2|N1
+        public ?string $jlptLevel                = null,
 
         // ── Japan Deployment Readiness ────────────────────────────────────
         public bool    $willingToBeDeployed      = false,
@@ -70,7 +78,7 @@ final readonly class CreateApplicantDTO
         public ?float  $currentSalary            = null,
         public string  $currentSalaryCurrency    = 'PHP',
 
-        // ── Family ────────────────────────────────────────────────────────
+        // ── Family (Updated with AIS extras) ──────────────────────────────
         public ?string $fatherName               = null,
         public ?string $fatherOccupation         = null,
         public ?string $fatherContact            = null,
@@ -80,6 +88,11 @@ final readonly class CreateApplicantDTO
         public ?string $spouseName               = null,
         public ?string $spouseOccupation         = null,
         public ?string $spouseContact            = null,
+        public ?float  $spouseSalary             = null,
+        public string  $spouseSalaryUnit         = 'per_month',
+
+        // ── Japan Contacts (NEW array) ────────────────────────────────────
+        public array   $japanContacts            = [],
 
         // ── Emergency Contact ─────────────────────────────────────────────
         public ?string $emergencyContactName         = null,

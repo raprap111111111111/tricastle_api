@@ -13,6 +13,8 @@ class ApplicantRepository extends BaseRepository
     protected array $relations = [
         'assignedStaff',
         'creator',
+        'family',           
+        'japanContacts',    
         'applicantBatches.batch',
     ];
 
@@ -25,7 +27,10 @@ class ApplicantRepository extends BaseRepository
         'passport_number',
         'city',
         'province',
-        'trade_or_occupation',   // search by "welder", "carpenter", etc.
+        'trade_or_occupation',
+        'applied_position',   
+        'birthplace',         
+        'religion',           
     ];
 
     protected array $filterable = [
@@ -35,8 +40,13 @@ class ApplicantRepository extends BaseRepository
         'nationality',
         'quality_grade',
         'assigned_staff_id',
-        'skill_category',        // skilled | semi_skilled | unskilled
-        'jlpt_level',            // N5 | N4 | N3 | N2 | N1
+        'skill_category',
+        'jlpt_level',
+        'applied_position',   
+        'trade_test_try',     
+        'blood_type',         
+        'dominant_hand',      
+        'religion',           
     ];
 
     protected array $sortable = [
@@ -53,6 +63,10 @@ class ApplicantRepository extends BaseRepository
         'jlpt_level',
         'years_japan_experience',
         'expected_salary',
+        'applied_position',          
+        'trade_test_date',           
+        'english_proficiency_pct',   
+        'date_of_birth',
         'created_at',
         'updated_at',
     ];
@@ -70,11 +84,31 @@ class ApplicantRepository extends BaseRepository
         $request = request();
 
         // ──────────────────────────────────────────────────
+        // 🎯 FULL NAME SEARCH (Robust CONCAT_WS ignores null middle names)
+        // ──────────────────────────────────────────────────
+
+        if ($request->filled('search')) {
+            $search = trim((string) $request->input('search'));
+
+            $query->where(function (Builder $q) use ($search) {
+                // 1. Search standard individual columns
+                foreach ($this->searchable as $field) {
+                    $q->orWhere($field, 'like', '%' . $search . '%');
+                }
+
+                // 2. Search full-name concatenations for multi-word queries
+                // CONCAT_WS automatically handles NULL middle_names without breaking the string
+                $q->orWhereRaw("CONCAT_WS(' ', first_name, last_name) LIKE ?", ['%' . $search . '%'])
+                  ->orWhereRaw("CONCAT_WS(' ', last_name, first_name) LIKE ?", ['%' . $search . '%'])
+                  ->orWhereRaw("CONCAT_WS(', ', last_name, first_name) LIKE ?", ['%' . $search . '%'])
+                  ->orWhereRaw("CONCAT_WS(' ', first_name, middle_name, last_name) LIKE ?", ['%' . $search . '%']);
+            });
+        }
+
+        // ──────────────────────────────────────────────────
         // Status filters
         // ──────────────────────────────────────────────────
 
-        // Exclude statuses (comma-separated)
-        // e.g. ?exclude_statuses=rejected,withdrawn
         if ($request->filled('exclude_statuses')) {
             $excluded = array_map(
                 'trim',
@@ -87,29 +121,23 @@ class ApplicantRepository extends BaseRepository
         // Passport filters
         // ──────────────────────────────────────────────────
 
-        // Passport expiring within X months
-        // e.g. ?passport_expiring_within_months=3
         if ($request->filled('passport_expiring_within_months')) {
             $months = (int) $request->input('passport_expiring_within_months');
             $query->whereNotNull('passport_expiry')
-                  ->whereDate('passport_expiry', '<=', now()->addMonths($months))
-                  ->whereDate('passport_expiry', '>=', now());
+                ->whereDate('passport_expiry', '<=', now()->addMonths($months))
+                ->whereDate('passport_expiry', '>=', now());
         }
 
         // ──────────────────────────────────────────────────
         // Batch filters
         // ──────────────────────────────────────────────────
 
-        // Filter by batch_id
-        // e.g. ?batch_id=5
         if ($request->filled('batch_id')) {
             $query->whereHas('applicantBatches', function (Builder $q) use ($request) {
                 $q->where('batch_id', $request->input('batch_id'));
             });
         }
 
-        // Filter by applicant's status within a batch
-        // e.g. ?batch_status=deployed
         if ($request->filled('batch_status')) {
             $query->whereHas('applicantBatches', function (Builder $q) use ($request) {
                 $q->where('status', $request->input('batch_status'));
@@ -120,56 +148,80 @@ class ApplicantRepository extends BaseRepository
         // Location filters
         // ──────────────────────────────────────────────────
 
-        // City — partial match, case-insensitive
-        // e.g. ?city=davao
         if ($request->filled('city')) {
             $city = trim($request->input('city'));
             $query->where('city', 'like', '%' . $city . '%');
         }
 
-        // Province — exact match (from dropdown)
-        // e.g. ?province=Cebu
         if ($request->filled('province')) {
             $query->where('province', $request->input('province'));
         }
 
-        // Address keyword — searches both current and permanent address
-        // e.g. ?address=Brgy+Poblacion
         if ($request->filled('address')) {
             $address = trim($request->input('address'));
             $query->where(function (Builder $q) use ($address) {
                 $q->where('current_address',   'like', '%' . $address . '%')
-                  ->orWhere('permanent_address', 'like', '%' . $address . '%');
+                    ->orWhere('permanent_address', 'like', '%' . $address . '%');
             });
+        }
+
+        // ──────────────────────────────────────────────────
+        // AIS / Trade Test filters
+        // ──────────────────────────────────────────────────
+
+        if ($request->filled('applied_position')) {
+            $position = trim($request->input('applied_position'));
+            $query->where('applied_position', 'like', '%' . $position . '%');
+        }
+
+        if ($request->filled('trade_test_try')) {
+            $query->where('trade_test_try', $request->input('trade_test_try'));
+        }
+
+        if ($request->filled('trade_test_date_from')) {
+            $query->whereDate('trade_test_date', '>=', $request->input('trade_test_date_from'));
+        }
+
+        if ($request->filled('trade_test_date_to')) {
+            $query->whereDate('trade_test_date', '<=', $request->input('trade_test_date_to'));
+        }
+
+        if ($request->filled('birthplace')) {
+            $birthplace = trim($request->input('birthplace'));
+            $query->where('birthplace', 'like', '%' . $birthplace . '%');
+        }
+
+        if ($request->filled('religion')) {
+            $query->where('religion', $request->input('religion'));
+        }
+
+        if ($request->filled('min_english_proficiency')) {
+            $query->where(
+                'english_proficiency_pct',
+                '>=',
+                (int) $request->input('min_english_proficiency'),
+            );
         }
 
         // ──────────────────────────────────────────────────
         // Japan deployment filters (Phase 1)
         // ──────────────────────────────────────────────────
 
-        // Trade / occupation keyword
-        // e.g. ?trade_or_occupation=welder
         if ($request->filled('trade_or_occupation')) {
             $trade = trim($request->input('trade_or_occupation'));
             $query->where('trade_or_occupation', 'like', '%' . $trade . '%');
         }
 
-        // Preferred work location keyword
-        // e.g. ?preferred_work_location=osaka
         if ($request->filled('preferred_work_location')) {
             $location = trim($request->input('preferred_work_location'));
             $query->where('preferred_work_location', 'like', '%' . $location . '%');
         }
 
-        // TITP occupation keyword
-        // e.g. ?titp_occupation=concrete
         if ($request->filled('titp_occupation')) {
             $titp = trim($request->input('titp_occupation'));
             $query->where('titp_occupation', 'like', '%' . $titp . '%');
         }
 
-        // Years of Japan experience — minimum threshold
-        // e.g. ?min_years_japan_experience=2
         if ($request->filled('min_years_japan_experience')) {
             $query->where(
                 'years_japan_experience',
@@ -178,8 +230,6 @@ class ApplicantRepository extends BaseRepository
             );
         }
 
-        // Expected salary range
-        // e.g. ?min_expected_salary=150000&max_expected_salary=300000
         if ($request->filled('min_expected_salary')) {
             $query->where('expected_salary', '>=', (float) $request->input('min_expected_salary'));
         }
@@ -189,20 +239,48 @@ class ApplicantRepository extends BaseRepository
         }
 
         // Boolean deployment flags
-        // Only filter when the key is explicitly present in the request.
-        // Sending ?willing_to_be_deployed=1 filters for true.
-        // Sending ?willing_to_be_deployed=0 filters for false.
-        // Omitting the key entirely skips the filter.
-        foreach ([
-            'understands_basic_english',
-            'willing_to_be_deployed',
-            'japan_deployment_ready',
-            'previous_japan_experience',
-            'has_titp_certificate',
-            'ssw_eligible',
-        ] as $flag) {
+        foreach (
+            [
+                'understands_basic_english',
+                'willing_to_be_deployed',
+                'japan_deployment_ready',
+                'previous_japan_experience',
+                'has_titp_certificate',
+                'ssw_eligible',
+            ] as $flag
+        ) {
             if ($request->has($flag)) {
                 $query->where($flag, (bool) $request->input($flag));
+            }
+        }
+
+        // ──────────────────────────────────────────────────
+        // Japan Contacts filter
+        // ──────────────────────────────────────────────────
+
+        if ($request->has('has_marucon_contact')) {
+            $has = (bool) $request->input('has_marucon_contact');
+            if ($has) {
+                $query->whereHas(
+                    'japanContacts',
+                    fn(Builder $q) =>
+                    $q->where('affiliation_type', 'marucon')
+                );
+            } else {
+                $query->whereDoesntHave(
+                    'japanContacts',
+                    fn(Builder $q) =>
+                    $q->where('affiliation_type', 'marucon')
+                );
+            }
+        }
+
+        if ($request->has('has_japan_contact')) {
+            $has = (bool) $request->input('has_japan_contact');
+            if ($has) {
+                $query->whereHas('japanContacts');
+            } else {
+                $query->whereDoesntHave('japanContacts');
             }
         }
 
@@ -225,8 +303,8 @@ class ApplicantRepository extends BaseRepository
     public function detachBatch(Applicant $applicant, int $batchId): void
     {
         $applicant->applicantBatches()
-                  ->where('batch_id', $batchId)
-                  ->delete();
+            ->where('batch_id', $batchId)
+            ->delete();
     }
 
     public function updateBatchStatus(
@@ -236,15 +314,15 @@ class ApplicantRepository extends BaseRepository
         array     $pivotData = [],
     ): void {
         $applicant->applicantBatches()
-                  ->where('batch_id', $batchId)
-                  ->update(array_merge(['status' => $status], $pivotData));
+            ->where('batch_id', $batchId)
+            ->update(array_merge(['status' => $status], $pivotData));
     }
 
     public function isInBatch(Applicant $applicant, int $batchId): bool
     {
         return $applicant->applicantBatches()
-                         ->where('batch_id', $batchId)
-                         ->exists();
+            ->where('batch_id', $batchId)
+            ->exists();
     }
 
     public function findWithBatches(int $id): ?Applicant
@@ -252,7 +330,31 @@ class ApplicantRepository extends BaseRepository
         return Applicant::with([
             'assignedStaff',
             'creator',
+            'family',
+            'japanContacts',
             'applicantBatches.batch',
+        ])->find($id);
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // AIS Helpers
+    // ═══════════════════════════════════════════════════════
+
+    public function findWithFullProfile(int $id): ?Applicant
+    {
+        return Applicant::with([
+            'assignedStaff',
+            'reviewer',
+            'creator',
+            'family',
+            'japanContacts',
+            'lifestyle',
+            'educations',
+            'employments',
+            'tattoos',
+            'currentDocuments.documentType',
+            'applicantBatches.batch',
+            'applicantBatches.processedBy',
         ])->find($id);
     }
 }

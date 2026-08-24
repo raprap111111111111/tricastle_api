@@ -123,4 +123,12 @@ class DashboardController extends Controller
             ],
         ]);
     }
+
+    /** GET /api/v1/dashboard/birthdays */
+    public function birthdays(): JsonResponse
+    {
+        return response()->json([
+            'data' => $this->service->getBirthdays(),
+        ]);
+    }
 }
