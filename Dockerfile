@@ -31,5 +31,5 @@ ENV COMPOSER_PROCESS_TIMEOUT=600
 # Install production dependencies
 RUN composer install --prefer-dist --no-dev --optimize-autoloader --no-interaction
 
-# Run migrations, passport setup, start seeder in background (&), then start web server
-CMD ["sh", "-c", "php artisan migrate --force && php artisan passport:keys --force && php artisan passport:install --force && (php artisan seed:legacy &) && php artisan serve --host=0.0.0.0 --port=${PORT:-10000}"]
+# Run migrations, passport setup, then start web server safely
+CMD ["sh", "-c", "php artisan migrate --force && php artisan passport:keys --force && php artisan passport:install --force && php artisan serve --host=0.0.0.0 --port=${PORT:-10000}"]
