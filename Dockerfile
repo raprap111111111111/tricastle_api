@@ -13,5 +13,5 @@ COPY . .
 # Install dependencies for production
 RUN composer install --no-dev --optimize-autoloader
 
-# Run migrations, passport keys, and passport install with --force
-CMD php artisan migrate --force && php artisan passport:keys --force && php artisan passport:install --force && php artisan serve --host=0.0.0.0 --port=10000
+# Run migrations, passport keys, passport install, AND SEEDERS on boot
+CMD php artisan migrate --force && php artisan passport:keys --force && php artisan passport:install --force && php artisan db:seed --force && php artisan serve --host=0.0.0.0 --port=10000

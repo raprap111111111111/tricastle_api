@@ -19,7 +19,7 @@ class DatabaseSeeder extends Seeder
             PermissionsSeeder::class,   
             RolesSeeder::class,         
             UsersSeeder::class,     
-            // ApplicantSeeder::class,
+            // ApplicantSeeder::class, // <-- COMMENT THIS OUT so it doesn't crash on duplicate emails
             DocumentTypeSeeder::class,
             ThemeSettingsSeeder::class,
             LegacyApplicantsSeeder::class,
