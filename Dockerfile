@@ -28,6 +28,5 @@ COPY . .
 # Install production dependencies
 RUN composer install --no-dev --optimize-autoloader
 
-# Start Laravel application
-# Render provides the PORT environment variable.
-CMD ["sh", "-c", "php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=${PORT:-10000}"]
+# Run migrations, generate Passport keys + clients, then start server
+CMD ["sh", "-c", "php artisan migrate --force && php artisan passport:keys --force && php artisan passport:install --force && php artisan serve --host=0.0.0.0 --port=${PORT:-10000}"]
