@@ -23,7 +23,7 @@ class UsersSeeder extends Seeder
         }
 
         $users = [
-            // 👑 16. SUPER ADMIN
+            // 👑 SUPER ADMIN
             [
                 'first_name'    => 'Ralph',
                 'middle_name'   => 'J.',
@@ -37,12 +37,12 @@ class UsersSeeder extends Seeder
                 'role'          => 'super_admin',
             ],
 
-            // 💼 1. ADMINISTRATOR
+            // 💼 ADMINISTRATOR
             [
                 'first_name'    => 'Ariel',
                 'middle_name'   => 'D.',
                 'last_name'     => 'Taocta',
-                'email'         => 'ad_taocta75@yahoo.com',
+                'email'         => 'ariel.taocta@tricastle.com',
                 'phone'         => '09637574220',
                 'password'      => 'password',
                 'employee_code' => 'EMP-002',
@@ -51,7 +51,7 @@ class UsersSeeder extends Seeder
                 'role'          => 'staff',
             ],
 
-            // 👔 2. SUPERVISOR
+            // 👔 SUPERVISOR
             [
                 'first_name'    => 'Jonel',
                 'middle_name'   => 'G.',
@@ -65,7 +65,7 @@ class UsersSeeder extends Seeder
                 'role'          => 'staff',
             ],
 
-            // 📋 STAFF MEMBERS (3 to 15 & 17)
+            // 📋 STAFF MEMBERS
             [
                 'first_name'    => 'Mary Grace',
                 'middle_name'   => 'C.',
@@ -118,7 +118,7 @@ class UsersSeeder extends Seeder
                 'first_name'    => 'Ramil',
                 'middle_name'   => 'C.',
                 'last_name'     => 'Sayosa',
-                'email'         => 'ramilsayosa22@gmail.com',
+                'email'         => 'ramil.sayosa@tricastle.com',
                 'phone'         => '09461951896',
                 'password'      => 'password',
                 'employee_code' => 'EMP-008',
@@ -166,7 +166,7 @@ class UsersSeeder extends Seeder
                 'first_name'    => 'Jerlyn',
                 'middle_name'   => 'P.',
                 'last_name'     => 'Saldo',
-                'email'         => 'jerlynsaldo03@gmail.com',
+                'email'         => 'jerlyn.saldo@tricastle.com',
                 'phone'         => '09453258491',
                 'password'      => 'password',
                 'employee_code' => 'EMP-012',
@@ -239,31 +239,35 @@ class UsersSeeder extends Seeder
         foreach ($users as $userData) {
             $roleName = $userData['role'];
             unset($userData['role']);
-            
+
             $userData['password'] = Hash::make($userData['password']);
             $userData['email_verified_at'] = now();
             $userData['is_active'] = true;
-            
-            $user = User::updateOrCreate(
-                ['email' => $userData['email']],
-                $userData
-            );
 
-            // ✅ Explicitly fetch role with 'api' guard
-            $role = Role::findByName($roleName, 'api');
-            
-            if (!$user->hasRole($role)) {
-                $user->assignRole($role);
+            // ✅ SAFE for production: find by email OR employee_code
+            $user = User::where('email', $userData['email'])
+                ->orWhere('employee_code', $userData['employee_code'])
+                ->first();
+
+            if ($user) {
+                // Update existing user (keeps the same ID)
+                $user->update($userData);
+                $this->command->line("   🔄 Updated: {$userData['first_name']} {$userData['last_name']} ({$roleName})");
+            } else {
+                // Create new user
+                $user = User::create($userData);
+                $this->command->line("   ✅ Created: {$userData['first_name']} {$userData['last_name']} ({$roleName})");
             }
 
-            $fullName = trim("{$userData['first_name']} {$userData['middle_name']} {$userData['last_name']}");
-            $this->command->line("   ✅ {$fullName} ({$roleName})");
+            // Assign role (safe even if already assigned)
+            $role = Role::findByName($roleName, 'api');
+            $user->syncRoles([$role]);   // syncRoles is cleaner than assignRole
         }
 
-        $this->command->info("");
-        $this->command->info("✅ Users Seeded Successfully!");
-        $this->command->line("   └── Total Users: " . User::count());
-        $this->command->info("");
-        $this->command->warn("🔐 Default password for all users: password");
+        $this->command->info('');
+        $this->command->info('✅ Users Seeded Successfully!');
+        $this->command->line('   └── Total Users: ' . User::count());
+        $this->command->info('');
+        $this->command->warn('🔐 Default password for all users: password');
     }
 }
