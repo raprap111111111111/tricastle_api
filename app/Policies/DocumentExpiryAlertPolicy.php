@@ -1,5 +1,4 @@
 <?php
-// app/Policies/DocumentExpiryAlertPolicy.php
 
 namespace App\Policies;
 
@@ -15,7 +14,8 @@ class DocumentExpiryAlertPolicy
 
     public function view(User $user, DocumentExpiryAlert $alert): bool
     {
-        return $user->can('document-expiry-alert.viewAny');
+        // was viewAny — should be view
+        return $user->can('document-expiry-alert.view');
     }
 
     public function create(User $user): bool

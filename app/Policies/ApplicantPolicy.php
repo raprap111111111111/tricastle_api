@@ -9,36 +9,37 @@ class ApplicantPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->can('applicants.viewAny');
+        // Changed from 'applicants.viewAny' to 'applicant.viewAny'
+        return $user->can('applicant.viewAny');
     }
 
     public function view(User $user, Applicant $applicant): bool
     {
-        return $user->can('applicants.view');
+        return $user->can('applicant.view');
     }
 
     public function create(User $user): bool
     {
-        return $user->can('applicants.create');
+        return $user->can('applicant.create');
     }
 
     public function update(User $user, Applicant $applicant): bool
     {
-        return $user->can('applicants.update');
+        return $user->can('applicant.update');
     }
 
     public function delete(User $user, Applicant $applicant): bool
     {
-        return $user->can('applicants.delete');
+        return $user->can('applicant.delete');
     }
 
     public function assign(User $user, Applicant $applicant): bool
     {
-        return $user->can('applicants.assign');
+        return $user->can('applicant.assign');
     }
 
     public function transfer(User $user, Applicant $applicant): bool
     {
-        return $user->can('applicants.transfer');
+        return $user->can('applicant.transfer');
     }
 }

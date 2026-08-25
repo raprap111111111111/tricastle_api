@@ -32,6 +32,16 @@ class PermissionsSeeder extends Seeder
             'applicant.transfer' => 'Transfer applicants between staff',
 
             // ============================================
+            // 🚀 DEPLOYMENT MANAGEMENT
+            // ============================================
+            'deployment.viewAny' => 'View all deployment records',
+            'deployment.view'    => 'View single deployment record',
+            'deployment.create'  => 'Deploy applicants',
+            'deployment.update'  => 'Update deployment details',
+            'deployment.cancel'  => 'Cancel deployment',
+            'deployment.bulk'    => 'Bulk deploy applicants',
+
+            // ============================================
             // ✅ CORRECTION APPROVALS
             // ============================================
             'correction-approval.viewAny'  => 'View all correction approvals',

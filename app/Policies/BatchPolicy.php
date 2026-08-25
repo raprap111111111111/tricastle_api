@@ -4,63 +4,63 @@ namespace App\Policies;
 
 use App\Models\Batch;
 use App\Models\User;
-use Illuminate\Auth\Access\Response;
 
 class BatchPolicy
 {
     /**
-     * Determine whether the user can view any models.
+     * Global bypass — super admins can do anything.
      */
+    public function before(User $user, string $ability): ?bool
+    {
+        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            return true;
+        }
+
+        return null; // fall through to normal checks
+    }
+
     public function viewAny(User $user): bool
     {
-        return false;
+        return $user->can('batch.viewAny');
     }
 
-    /**
-     * Determine whether the user can view the model.
-     */
     public function view(User $user, Batch $batch): bool
     {
-        return false;
+        return $user->can('batch.view');
     }
 
-    /**
-     * Determine whether the user can create models.
-     */
     public function create(User $user): bool
     {
-        return false;
+        return $user->can('batch.create');
     }
 
-    /**
-     * Determine whether the user can update the model.
-     */
     public function update(User $user, Batch $batch): bool
     {
-        return false;
+        return $user->can('batch.update');
     }
 
-    /**
-     * Determine whether the user can delete the model.
-     */
     public function delete(User $user, Batch $batch): bool
     {
-        return false;
+        return $user->can('batch.delete');
     }
 
-    /**
-     * Determine whether the user can restore the model.
-     */
     public function restore(User $user, Batch $batch): bool
     {
-        return false;
+        return $user->can('batch.delete');
     }
 
-    /**
-     * Determine whether the user can permanently delete the model.
-     */
     public function forceDelete(User $user, Batch $batch): bool
     {
-        return false;
+        return $user->can('batch.delete');
+    }
+
+    public function updateStatus(User $user, Batch $batch): bool
+    {
+        return $user->can('batch.updateStatus');
+    }
+
+    public function manageSlots(User $user, Batch $batch): bool
+    {
+        return $user->can('batch.manageSlots');
     }
 }

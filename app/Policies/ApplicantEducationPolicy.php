@@ -4,63 +4,50 @@ namespace App\Policies;
 
 use App\Models\ApplicantEducation;
 use App\Models\User;
-use Illuminate\Auth\Access\Response;
 
 class ApplicantEducationPolicy
 {
-    /**
-     * Determine whether the user can view any models.
-     */
+    public function before(User $user, string $ability): ?bool
+    {
+        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            return true;
+        }
+
+        return null;
+    }
+
     public function viewAny(User $user): bool
     {
-        return false;
+        return $user->can('applicant-education.viewAny');
     }
 
-    /**
-     * Determine whether the user can view the model.
-     */
     public function view(User $user, ApplicantEducation $applicantEducation): bool
     {
-        return false;
+        return $user->can('applicant-education.view');
     }
 
-    /**
-     * Determine whether the user can create models.
-     */
     public function create(User $user): bool
     {
-        return false;
+        return $user->can('applicant-education.create');
     }
 
-    /**
-     * Determine whether the user can update the model.
-     */
     public function update(User $user, ApplicantEducation $applicantEducation): bool
     {
-        return false;
+        return $user->can('applicant-education.update');
     }
 
-    /**
-     * Determine whether the user can delete the model.
-     */
     public function delete(User $user, ApplicantEducation $applicantEducation): bool
     {
-        return false;
+        return $user->can('applicant-education.delete');
     }
 
-    /**
-     * Determine whether the user can restore the model.
-     */
     public function restore(User $user, ApplicantEducation $applicantEducation): bool
     {
-        return false;
+        return $user->can('applicant-education.delete');
     }
 
-    /**
-     * Determine whether the user can permanently delete the model.
-     */
     public function forceDelete(User $user, ApplicantEducation $applicantEducation): bool
     {
-        return false;
+        return $user->can('applicant-education.delete');
     }
 }

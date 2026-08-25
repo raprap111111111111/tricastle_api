@@ -516,6 +516,12 @@ class RolesSeeder extends Seeder
             'applicant-batch.reject',
             'applicant-batch.withdraw',
             'applicant-batch.deploy',
+            'deployment.viewAny',
+            'deployment.view',
+            'deployment.create', 
+            'deployment.update',  
+            'deployment.cancel',  
+            'deployment.bulk',    
         ]);
 
         $this->command->line(' ✅ staff (all permissions)');

@@ -9,7 +9,6 @@ class CompanyCategoryPolicy
 {
     /**
      * Global bypass — super admins can do anything.
-     * Adjust `isSuperAdmin()` to match your user schema.
      */
     public function before(User $user, string $ability): ?bool
     {
@@ -22,36 +21,37 @@ class CompanyCategoryPolicy
 
     public function viewAny(User $user): bool
     {
-        return $user->can('company_category.view');
+        // Changed _ to - and view to viewAny
+        return $user->can('company-category.viewAny');
     }
 
     public function view(User $user, CompanyCategory $category): bool
     {
-        return $user->can('company_category.view');
+        return $user->can('company-category.view');
     }
 
     public function create(User $user): bool
     {
-        return $user->can('company_category.create');
+        return $user->can('company-category.create');
     }
 
     public function update(User $user, CompanyCategory $category): bool
     {
-        return $user->can('company_category.update');
+        return $user->can('company-category.update');
     }
 
     public function delete(User $user, CompanyCategory $category): bool
     {
-        return $user->can('company_category.delete');
+        return $user->can('company-category.delete');
     }
 
     public function restore(User $user, CompanyCategory $category): bool
     {
-        return $user->can('company_category.delete');
+        return $user->can('company-category.delete');
     }
 
     public function forceDelete(User $user, CompanyCategory $category): bool
     {
-        return $user->can('company_category.delete');
+        return $user->can('company-category.delete');
     }
 }

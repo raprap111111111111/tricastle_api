@@ -4,63 +4,55 @@ namespace App\Policies;
 
 use App\Models\ApplicantEmployment;
 use App\Models\User;
-use Illuminate\Auth\Access\Response;
 
 class ApplicantEmploymentPolicy
 {
-    /**
-     * Determine whether the user can view any models.
-     */
+    public function before(User $user, string $ability): ?bool
+    {
+        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            return true;
+        }
+
+        return null;
+    }
+
     public function viewAny(User $user): bool
     {
-        return false;
+        return $user->can('applicant-employment.viewAny');
     }
 
-    /**
-     * Determine whether the user can view the model.
-     */
     public function view(User $user, ApplicantEmployment $applicantEmployment): bool
     {
-        return false;
+        return $user->can('applicant-employment.view');
     }
 
-    /**
-     * Determine whether the user can create models.
-     */
     public function create(User $user): bool
     {
-        return false;
+        return $user->can('applicant-employment.create');
     }
 
-    /**
-     * Determine whether the user can update the model.
-     */
     public function update(User $user, ApplicantEmployment $applicantEmployment): bool
     {
-        return false;
+        return $user->can('applicant-employment.update');
     }
 
-    /**
-     * Determine whether the user can delete the model.
-     */
     public function delete(User $user, ApplicantEmployment $applicantEmployment): bool
     {
-        return false;
+        return $user->can('applicant-employment.delete');
     }
 
-    /**
-     * Determine whether the user can restore the model.
-     */
     public function restore(User $user, ApplicantEmployment $applicantEmployment): bool
     {
-        return false;
+        return $user->can('applicant-employment.delete');
     }
 
-    /**
-     * Determine whether the user can permanently delete the model.
-     */
     public function forceDelete(User $user, ApplicantEmployment $applicantEmployment): bool
     {
-        return false;
+        return $user->can('applicant-employment.delete');
+    }
+
+    public function markAsCurrent(User $user, ApplicantEmployment $applicantEmployment): bool
+    {
+        return $user->can('applicant-employment.markAsCurrent');
     }
 }
