@@ -28,8 +28,10 @@ COPY . .
 # Increase Composer timeout for slow network downloads
 ENV COMPOSER_PROCESS_TIMEOUT=600
 
-# Install production dependencies
-RUN composer install --prefer-dist --no-dev --optimize-autoloader --no-interaction
+RUN composer install \
+    --prefer-dist \
+    --no-dev \
+    --optimize-autoloader \
+    --no-interaction
 
-# Run migrations, passport setup, then start web server safely
-CMD ["sh", "-c", "php artisan migrate --force && php artisan passport:keys --force && php artisan passport:install --force && php artisan serve --host=0.0.0.0 --port=${PORT:-10000}"]
+CMD ["sh", "-c", "php artisan migrate --force && php artisan passport:keys --force && php artisan optimize:clear && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan serve --host=0.0.0.0 --port=${PORT:-10000}"]

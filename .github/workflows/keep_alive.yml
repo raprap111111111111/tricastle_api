@@ -2,14 +2,15 @@ name: Keep Render Alive
 
 on:
   schedule:
-    # Runs every 12 minutes
+    # Runs every 12 minutes to prevent Render from sleeping
     - cron: '*/12 * * * *'
-  workflow_dispatch: # Allows manual trigger
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Render Backend
+      - name: Ping Render Backend Health Endpoint
         run: |
-          curl -s https://your-app-name.onrender.com/api/health
+          response=$(curl -s -w "\nHTTP_STATUS:%{http_code}" https://tricastle-api.onrender.com/api/v1/health)
+          echo "$response"
