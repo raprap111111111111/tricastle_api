@@ -1,6 +1,5 @@
 FROM php:8.4-cli
 
-# Install system dependencies & PHP extensions
 RUN apt-get update && apt-get install -y \
     git \
     unzip \
@@ -16,16 +15,12 @@ RUN apt-get update && apt-get install -y \
         pcntl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Set working directory
 WORKDIR /app
 
-# Copy Laravel application
 COPY . .
 
-# Increase Composer timeout for slow network downloads
 ENV COMPOSER_PROCESS_TIMEOUT=600
 
 RUN composer install \
@@ -34,4 +29,4 @@ RUN composer install \
     --optimize-autoloader \
     --no-interaction
 
-CMD ["sh", "-c", "php artisan migrate --force && php artisan passport:keys --force && php artisan optimize:clear && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan serve --host=0.0.0.0 --port=${PORT:-10000}"]
+CMD ["sh", "-c", "php artisan migrate --force && php artisan passport:keys --force && php artisan optimize:clear && php artisan config:cache && php artisan route:cache && php artisan serve --host=0.0.0.0 --port=${PORT:-10000}"]
