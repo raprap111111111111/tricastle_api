@@ -2,9 +2,44 @@
 // routes/api.php
 
 use App\Http\Controllers\v1\AuthController;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 
-Route::prefix('v1')->group(function () {
+// ============================================
+// 🚀 TEMPORARY ONE-TIME SEEDER ROUTE
+// ============================================
+$seederCallback = function () {
+    set_time_limit(600); // Allow up to 10 minutes for 5,500+ records
+    ini_set('memory_limit', '512M');
+
+    try {
+        Artisan::call('db:seed', [
+            '--class' => 'Database\\Seeders\\LegacyApplicantsSeeder',
+            '--force' => true,
+        ]);
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'LegacyApplicantsSeeder finished successfully!',
+            'output'  => Artisan::output(),
+        ]);
+    } catch (\Throwable $e) {
+        return response()->json([
+            'status'  => 'error',
+            'message' => $e->getMessage(),
+            'file'    => $e->getFile(),
+            'line'    => $e->getLine(),
+        ], 500);
+    }
+};
+
+// Accessible at: /api/run-legacy-seeder-once
+Route::get('/run-legacy-seeder-once', $seederCallback);
+
+Route::prefix('v1')->group(function () use ($seederCallback) {
+
+    // Also accessible at: /api/v1/run-legacy-seeder-once
+    Route::get('/run-legacy-seeder-once', $seederCallback);
 
     // ============================================
     // 🔓 PUBLIC ROUTES
