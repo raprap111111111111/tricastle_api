@@ -13,6 +13,7 @@ use App\Domain\ApplicantDocument\Actions\UpdateApplicantDocumentAction;
 use App\Domain\ApplicantDocument\Actions\UpdateApplicantDocumentStatusAction;
 use App\Domain\ApplicantDocument\Actions\UploadApplicantDocumentAction;
 use App\Domain\ApplicantDocument\Actions\VerifyApplicantDocumentAction;
+use App\Domain\ApplicantDocument\Actions\GetExpiringDocumentsAction;
 use App\Domain\ApplicantDocument\DTOs\UploadApplicantDocumentDTO;
 use App\Domain\ApplicantDocument\Mappers\ApplicantDocumentMapper;
 use App\Http\Controllers\Controller;
@@ -25,38 +26,31 @@ use App\Http\Requests\v1\ApplicantDocument\UpdateApplicantDocumentStatusRequest;
 use App\Http\Requests\v1\ApplicantDocument\UploadApplicantDocumentRequest;
 use App\Http\Requests\v1\ApplicantDocument\UploadNewVersionRequest;
 use App\Http\Requests\v1\ApplicantDocument\VerifyApplicantDocumentRequest;
+use App\Http\Requests\v1\ApplicantDocument\GetExpiringDocumentsRequest;
 use App\Http\Resources\v1\ApplicantDocumentResource;
 use App\Models\ApplicantDocument;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
-use App\Domain\ApplicantDocument\Actions\GetExpiringDocumentsAction;
-use App\Http\Requests\v1\ApplicantDocument\GetExpiringDocumentsRequest;
-
 
 class ApplicantDocumentController extends Controller
 {
     public function __construct(
-        private readonly ListApplicantDocumentsAction      $listAction,
-        private readonly ListDocumentBatchesAction         $listBatchesAction,
+        private readonly ListApplicantDocumentsAction        $listAction,
+        private readonly ListDocumentBatchesAction           $listBatchesAction,
         private readonly ListApplicantDocumentFoldersAction $listFoldersAction,
-        private readonly GetApplicantFolderAction          $getFolderAction,
-        private readonly GetApplicantDocumentAction        $getAction,
-        private readonly UploadApplicantDocumentAction     $uploadAction,
-        private readonly UpdateApplicantDocumentAction     $updateAction,
-        private readonly DeleteApplicantDocumentAction     $deleteAction,
-        private readonly VerifyApplicantDocumentAction     $verifyAction,
-        private readonly RejectApplicantDocumentAction     $rejectAction,
-        private readonly UpdateApplicantDocumentStatusAction     $updateStatusAction,
-        private readonly GetExpiringDocumentsAction $getExpiringDocumentsAction,
+        private readonly GetApplicantFolderAction            $getFolderAction,
+        private readonly GetApplicantDocumentAction          $getAction,
+        private readonly UploadApplicantDocumentAction       $uploadAction,
+        private readonly UpdateApplicantDocumentAction       $updateAction,
+        private readonly DeleteApplicantDocumentAction       $deleteAction,
+        private readonly VerifyApplicantDocumentAction       $verifyAction,
+        private readonly RejectApplicantDocumentAction       $rejectAction,
+        private readonly UpdateApplicantDocumentStatusAction $updateStatusAction,
+        private readonly GetExpiringDocumentsAction          $getExpiringDocumentsAction,
     ) {}
 
-    // =========================================================================
-    // Level 1 — Batches that contain documents
-    // GET /applicant-documents/batches
-    // =========================================================================
     public function batches(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -68,10 +62,6 @@ class ApplicantDocumentController extends Controller
         return $this->responseSuccess($data, 'Batches retrieved successfully');
     }
 
-    // =========================================================================
-    // Level 2 — Applicant folders inside a batch
-    // GET /applicant-documents/folders?batch_id=&search=&offset=&limit=
-    // =========================================================================
     public function folders(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -86,10 +76,6 @@ class ApplicantDocumentController extends Controller
         return $this->responseSuccess($result, 'Folders retrieved successfully');
     }
 
-    // =========================================================================
-    // Level 3 — Single applicant document folder
-    // GET /applicant-documents/{applicantId}/folder
-    // =========================================================================
     public function folder(int $applicantId): JsonResponse
     {
         $data = $this->getFolderAction->execute($applicantId);
@@ -97,14 +83,6 @@ class ApplicantDocumentController extends Controller
         return $this->responseSuccess($data, 'Folder retrieved successfully');
     }
 
-    // =========================================================================
-    // Standard document CRUD
-    // =========================================================================
-
-    /**
-     * List all documents.
-     * GET /applicant-documents
-     */
     public function index(GetAllApplicantDocumentRequest $request): JsonResponse
     {
         $result = $this->listAction->execute(
@@ -115,10 +93,6 @@ class ApplicantDocumentController extends Controller
         return $this->responseSuccess($result, 'Documents retrieved successfully');
     }
 
-    /**
-     * Show a single document.
-     * GET /applicant-documents/{applicantDocument}
-     */
     public function show(
         GetApplicantDocumentRequest $request,
         ApplicantDocument           $applicantDocument
@@ -131,10 +105,6 @@ class ApplicantDocumentController extends Controller
         );
     }
 
-    /**
-     * Upload a new document.
-     * POST /applicant-documents
-     */
     public function store(UploadApplicantDocumentRequest $request): JsonResponse
     {
         $document = $this->uploadAction->execute(
@@ -148,10 +118,6 @@ class ApplicantDocumentController extends Controller
         );
     }
 
-    /**
-     * Upload a new version of an existing document.
-     * POST /applicant-documents/{applicantDocument}/versions
-     */
     public function uploadVersion(
         UploadNewVersionRequest $request,
         ApplicantDocument       $applicantDocument
@@ -177,10 +143,6 @@ class ApplicantDocumentController extends Controller
         );
     }
 
-    /**
-     * Update a document.
-     * PUT /applicant-documents/{applicantDocument}
-     */
     public function update(
         UpdateApplicantDocumentRequest $request,
         ApplicantDocument              $applicantDocument
@@ -196,10 +158,6 @@ class ApplicantDocumentController extends Controller
         );
     }
 
-    /**
-     * Delete a document.
-     * DELETE /applicant-documents/{applicantDocument}
-     */
     public function destroy(
         DeleteApplicantDocumentRequest $request,
         ApplicantDocument              $applicantDocument
@@ -209,10 +167,6 @@ class ApplicantDocumentController extends Controller
         return $this->responseSuccess(null, 'Document deleted successfully');
     }
 
-    /**
-     * Verify a document.
-     * POST /applicant-documents/{applicantDocument}/verify
-     */
     public function verify(
         VerifyApplicantDocumentRequest $request,
         ApplicantDocument              $applicantDocument
@@ -228,10 +182,6 @@ class ApplicantDocumentController extends Controller
         );
     }
 
-    /**
-     * Reject a document.
-     * POST /applicant-documents/{applicantDocument}/reject
-     */
     public function reject(
         RejectApplicantDocumentRequest $request,
         ApplicantDocument              $applicantDocument
@@ -247,10 +197,6 @@ class ApplicantDocumentController extends Controller
         );
     }
 
-    /**
-     * Update the status of a document.
-     * PATCH /applicant-documents/{applicantDocument}/status
-     */
     public function updateStatus(
         UpdateApplicantDocumentStatusRequest $request,
         ApplicantDocument $applicantDocument
@@ -267,42 +213,67 @@ class ApplicantDocumentController extends Controller
         );
     }
 
-
     /**
-     * Stream file inline for preview (images, PDFs, videos).
+     * Stream file inline (Supports local, public, r2, and s3)
+     * GET /applicant-documents/{applicantDocument}/file
      * GET /applicant-documents/{applicantDocument}/preview
      */
-    public function preview(ApplicantDocument $applicantDocument): BinaryFileResponse
+    public function preview(ApplicantDocument $applicantDocument)
     {
-        $disk = $this->resolveDisk($applicantDocument);
+        [$diskInstance, $diskName] = $this->resolveDiskInfo($applicantDocument);
 
-        if (!$disk) {
-            abort(404, 'File not found on server.');
+        if (!$diskInstance) {
+            abort(404, 'File not found on storage server.');
         }
 
+        $path = $applicantDocument->file_path;
+        $mime = $applicantDocument->mime_type ?? 'application/octet-stream';
+        $filename = $applicantDocument->file_name ?? 'file';
+
+        // 🎯 FIX: Cloud storage (R2/S3) cannot use response()->file($disk->path()). Stream or redirect instead!
+        if (in_array($diskName, ['r2', 's3'])) {
+            try {
+                if ($diskInstance->providesTemporaryUrls()) {
+                    return redirect()->away($diskInstance->temporaryUrl($path, now()->addMinutes(30)));
+                }
+            } catch (\Throwable $e) {}
+
+            return response()->stream(
+                fn () => echoStream($diskInstance->readStream($path)),
+                200,
+                [
+                    'Content-Type'        => $mime,
+                    'Content-Disposition' => 'inline; filename="' . addslashes($filename) . '"',
+                ]
+            );
+        }
+
+        // Local or public filesystem
         return response()->file(
-            $disk->path($applicantDocument->file_path),
+            $diskInstance->path($path),
             [
-                'Content-Type'        => $applicantDocument->mime_type ?? 'application/octet-stream',
-                'Content-Disposition' => 'inline; filename="' . addslashes($applicantDocument->file_name) . '"',
-                'Cache-Control'       => 'private, max-age=0, must-revalidate',
+                'Content-Type'        => $mime,
+                'Content-Disposition' => 'inline; filename="' . addslashes($filename) . '"',
+                'Cache-Control'       => 'private, max-age=86400',
             ],
         );
     }
 
-    /**
-     * Download file as attachment.
-     * GET /applicant-documents/{applicantDocument}/download
-     */
+    /** Alias for preview */
+    public function file(ApplicantDocument $applicantDocument)
+    {
+        return $this->preview($applicantDocument);
+    }
+
     public function download(ApplicantDocument $applicantDocument): StreamedResponse
     {
-        $disk = $this->resolveDisk($applicantDocument);
+        [$diskInstance] = $this->resolveDiskInfo($applicantDocument);
 
-        if (!$disk) {
+        if (!$diskInstance) {
             abort(404, 'File not found on server.');
         }
 
-        return $disk->download(
+        return $diskInstance->download(
             $applicantDocument->file_path,
             $applicantDocument->file_name,
             [
@@ -311,37 +282,6 @@ class ApplicantDocumentController extends Controller
         );
     }
 
-    /**
-     * Try known disks until we find the file.
-     * Returns the Filesystem instance that has the file, or null.
-     */
-    private function resolveDisk(ApplicantDocument $doc)
-    {
-        if (empty($doc->file_path)) {
-            return null;
-        }
-
-        // Order: try public first (most common for uploads), then local, then S3
-        $candidates = ['public', 'local', 's3'];
-
-        foreach ($candidates as $name) {
-            try {
-                $disk = Storage::disk($name);
-                if ($disk->exists($doc->file_path)) {
-                    return $disk;
-                }
-            } catch (\Throwable $e) {
-                // disk not configured, skip
-                continue;
-            }
-        }
-
-        return null;
-    }
-    /**
-     * GET /applicant-documents/expiring
-     * Returns documents expiring within 90 days or already expired.
-     */
     public function expiring(GetExpiringDocumentsRequest $request): JsonResponse
     {
         $result = $this->getExpiringDocumentsAction->execute($request->validated());
@@ -351,4 +291,38 @@ class ApplicantDocumentController extends Controller
             'Expiring documents retrieved successfully'
         );
     }
+
+    /**
+     * 🎯 FIX: Resolves disk checking ['r2', 's3', 'public', 'local'] in proper priority order
+     */
+    private function resolveDiskInfo(ApplicantDocument $doc): array
+    {
+        if (empty($doc->file_path)) {
+            return [null, null];
+        }
+
+        $candidates = ['r2', 's3', 'public', 'local'];
+
+        foreach ($candidates as $name) {
+            try {
+                $disk = Storage::disk($name);
+                if ($disk->exists($doc->file_path)) {
+                    return [$disk, $name];
+                }
+            } catch (\Throwable $e) {
+                continue;
+            }
+        }
+
+        return [null, null];
+    }
+}
+
+function echoStream($stream) {
+    if (!$stream) return;
+    while (!feof($stream)) {
+        echo fread($stream, 1024 * 8);
+        flush();
+    }
+    fclose($stream);
 }

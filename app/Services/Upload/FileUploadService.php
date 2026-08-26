@@ -1,9 +1,8 @@
 <?php
 
-// app/Services/Upload/FileUploadService.php
-
 namespace App\Services\Upload;
 
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -22,22 +21,25 @@ class FileUploadService
         bool         $generateThumbnail = false,
         bool         $isEncrypted = false,
     ): array {
-        $disk     = $disk ?? config('upload.disk', 'public');
+        $disk     = $disk ?? config('filesystems.default', 'public');
         $fileName = $this->generateFileName($file);
         $path     = $folder . '/' . $fileName;
 
+        /** @var FilesystemAdapter $storage */
+        $storage = Storage::disk($disk);
+
         if ($this->isImage($file)) {
             $processedFile = $this->imageProcessor->process($file);
-            Storage::disk($disk)->put($path, $processedFile, 'public');
+            $storage->put($path, $processedFile, 'public');
         } else {
-            Storage::disk($disk)->putFileAs($folder, $file, $fileName, 'public');
+            $storage->putFileAs($folder, $file, $fileName, 'public');
         }
 
         $thumbnailPath = null;
         if ($generateThumbnail && $this->isImage($file)) {
             $thumbnailPath = $this->thumbnailService->generate(
                 file:   $file,
-                folder: config('upload.paths.thumbnails'),
+                folder: config('upload.paths.thumbnails', 'uploads/thumbnails'),
                 disk:   $disk,
             );
         }
@@ -78,10 +80,13 @@ class FileUploadService
 
     public function delete(string $path, ?string $disk = null): bool
     {
-        $disk = $disk ?? config('upload.disk', 'public');
+        $disk = $disk ?? config('filesystems.default', 'public');
 
-        if (Storage::disk($disk)->exists($path)) {
-            return Storage::disk($disk)->delete($path);
+        /** @var FilesystemAdapter $storage */
+        $storage = Storage::disk($disk);
+
+        if ($storage->exists($path)) {
+            return $storage->delete($path);
         }
 
         return false;
@@ -117,21 +122,35 @@ class FileUploadService
 
     public function getUrl(string $path, ?string $disk = null): string
     {
-        $disk = $disk ?? config('upload.disk', 'public');
+        $disk = $disk ?? config('filesystems.default', 'public');
 
-        if ($disk === 's3') {
-            return Storage::disk('s3')->url($path);
+        /** @var FilesystemAdapter $storage */
+        $storage = Storage::disk($disk);
+
+        try {
+            if (in_array($disk, ['r2', 's3'])) {
+                if (method_exists($storage, 'providesTemporaryUrls') && $storage->providesTemporaryUrls()) {
+                    return $storage->temporaryUrl($path, now()->addHours(24));
+                }
+            }
+            return $storage->url($path);
+        } catch (\Throwable $e) {
+            return url("storage/{$path}");
         }
-
-        return Storage::disk($disk)->url($path);
     }
 
-    public function getTemporaryUrl(string $path, int $minutes = 60, string $disk = 's3'): string
+    public function getTemporaryUrl(string $path, int $minutes = 1440, ?string $disk = null): string
     {
-        return Storage::disk($disk)->temporaryUrl(
-            $path,
-            now()->addMinutes($minutes),
-        );
+        $disk = $disk ?? config('filesystems.default', 'r2');
+        
+        /** @var FilesystemAdapter $storage */
+        $storage = Storage::disk($disk);
+
+        try {
+            return $storage->temporaryUrl($path, now()->addMinutes($minutes));
+        } catch (\Throwable $e) {
+            return $this->getUrl($path, $disk);
+        }
     }
 
     public function isImage(UploadedFile $file): bool
@@ -141,8 +160,12 @@ class FileUploadService
 
     public function exists(string $path, ?string $disk = null): bool
     {
-        $disk = $disk ?? config('upload.disk', 'public');
-        return Storage::disk($disk)->exists($path);
+        $disk = $disk ?? config('filesystems.default', 'public');
+
+        /** @var FilesystemAdapter $storage */
+        $storage = Storage::disk($disk);
+
+        return $storage->exists($path);
     }
 
     private function generateFileName(UploadedFile $file): string

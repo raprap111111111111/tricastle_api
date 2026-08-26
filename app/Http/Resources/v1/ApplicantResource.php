@@ -12,9 +12,27 @@ class ApplicantResource extends JsonResource
         // Safe relation check to prevent N+1 queries during list fetching
         $family = $this->relationLoaded('family') ? $this->family : null;
 
+        // Extract 2x2 Photo URL automatically if currentDocuments is loaded
+        $photoUrl = $this->when($this->relationLoaded('currentDocuments'), function () {
+            $doc = $this->currentDocuments->first(function ($d) {
+                $code = strtoupper((string) ($d->documentType?->code ?? ''));
+                $name = strtoupper((string) ($d->documentType?->name ?? ''));
+                return str_contains($code, 'PHOTO') 
+                    || str_contains($code, '2X2') 
+                    || str_contains($name, 'PHOTO') 
+                    || str_contains($name, '2X2');
+            });
+
+            return $doc ? (new ApplicantDocumentResource($doc))->toArray(request())['file_url'] ?? null : null;
+        });
+
         return [
             'id'             => $this->id,
             'applicant_code' => $this->applicant_code,
+
+            // 🎯 Top-level photo accessor for table avatar & AIS PDF
+            'photo_url'      => $this->photo_url ?? $this->avatar_url ?? $photoUrl,
+            'profile_photo_url' => $this->photo_url ?? $this->avatar_url ?? $photoUrl,
 
             // ─── AIS / Trade Test ─────────────────────────────────────────
             'applied_position'        => $this->applied_position,
@@ -102,7 +120,7 @@ class ApplicantResource extends JsonResource
                 'current_salary_currency' => $this->current_salary_currency,
             ],
 
-            // ─── Family Details (ADDED: AIS Family Background Sentences) ───
+            // ─── Family Details (Includes AIS Background Sentences) ───────
             'family' => [
                 'father' => [
                     'name'       => $family?->father_name ?? $this->father_name,
@@ -127,7 +145,6 @@ class ApplicantResource extends JsonResource
                     'phone'        => $family?->emergency_contact_phone ?? $this->emergency_contact_phone,
                     'address'      => $family?->emergency_contact_address ?? $this->emergency_contact_address,
                 ],
-                // 🎯 ADDED FOR AIS FAMILY BACKGROUND TEXT
                 'living_situation'     => $family?->living_situation ?? $this->living_situation,
                 'birth_order'          => $family?->birth_order ?? $this->birth_order,
                 'siblings_count'       => $family?->siblings_count ?? $this->siblings_count,
@@ -243,6 +260,23 @@ class ApplicantResource extends JsonResource
                     'deployment_notes'         => $ab->deployment_notes,
                     'cancellation_reason'      => $ab->cancellation_reason,
                     'cancelled_at'             => $ab->cancelled_at?->toIso8601String(),
+                ])
+            ),
+
+            // ─── Legacy batches pivot ─────────────────────────────────────
+            'batches' => $this->whenLoaded(
+                'batches',
+                fn () => $this->batches->map(fn ($batch) => [
+                    'id'           => $batch->id,
+                    'batch_code'   => $batch->batch_code ?? null,
+                    'name'         => $batch->name,
+                    'company_name' => $batch->company?->name,
+                    'pivot'        => [
+                        'status'         => $batch->pivot->status,
+                        'assigned_at'    => $batch->pivot->assigned_at,
+                        'interview_date' => $batch->pivot->interview_date,
+                        'deployed_at'    => $batch->pivot->deployed_at,
+                    ],
                 ])
             ),
 

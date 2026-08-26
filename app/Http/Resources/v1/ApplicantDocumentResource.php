@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\v1;
 
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Storage;
@@ -10,15 +11,42 @@ class ApplicantDocumentResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        // 🎯 Resolve the file URL from storage
-        $path = $this->file_path ?? $this->path ?? null;
-        $fileUrl = $this->file_url ?? $this->url ?? $this->public_url ?? null;
+        // 1. Resolve path from direct attribute or fileRepository relation
+        $path = $this->file_path
+            ?? $this->path
+            ?? $this->fileRepository?->file_path
+            ?? $this->fileRepository?->path
+            ?? null;
 
-        if (!$fileUrl && $path) {
+        // 2. Resolve disk (r2, s3, public, local)
+        $diskName = $this->disk
+            ?? $this->fileRepository?->disk
+            ?? config('filesystems.default', 'public');
+
+        $fileUrl = null;
+
+        if ($path) {
             try {
-                $fileUrl = Storage::url($path);
+                /** @var FilesystemAdapter $disk */
+                $disk = Storage::disk($diskName);
+
+                // For private cloud buckets (R2 / S3), use temporary signed URLs (valid 4 hrs)
+                if (in_array($diskName, ['r2', 's3']) && method_exists($disk, 'temporaryUrl')) {
+                    $fileUrl = $disk->temporaryUrl($path, now()->addHours(4));
+                } else {
+                    $fileUrl = $disk->url($path);
+                }
             } catch (\Throwable $e) {
-                // Ignore storage errors
+                // Silently fallback if disk is improperly configured
+            }
+        }
+
+        // 3. 🎯 BULLETPROOF FALLBACK: If storage URL is still null or relative, route through API stream
+        if (!$fileUrl || !str_starts_with($fileUrl, 'http')) {
+            if ($this->id) {
+                $fileUrl = url("/api/v1/applicant-documents/{$this->id}/file");
+            } elseif ($path) {
+                $fileUrl = url("/storage/{$path}");
             }
         }
 
@@ -29,12 +57,12 @@ class ApplicantDocumentResource extends JsonResource
             'file_repository_id'  => $this->file_repository_id,
 
             // File Info
-            'file_name'           => $this->file_name,
-            'file_type'           => $this->file_type,
-            'file_size'           => $this->file_size,
-            'mime_type'           => $this->mime_type,
+            'file_name'           => $this->file_name ?? $this->fileRepository?->original_name,
+            'file_type'           => $this->file_type ?? $this->fileRepository?->extension,
+            'file_size'           => $this->file_size ?? $this->fileRepository?->file_size,
+            'mime_type'           => $this->mime_type ?? $this->fileRepository?->mime_type,
 
-            // 🎯 ADDED: Photo / Document URLs for AIS PDF rendering
+            // 🎯 GUARANTEED NON-NULL URLS FOR FRONTEND & PDF GENERATION
             'file_url'            => $fileUrl,
             'url'                 => $fileUrl,
             'public_url'          => $fileUrl,
