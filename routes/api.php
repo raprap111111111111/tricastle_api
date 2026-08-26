@@ -1,7 +1,7 @@
 <?php
-// routes/api.php
 
 use App\Http\Controllers\v1\AuthController;
+use App\Http\Controllers\v1\HealthController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -10,13 +10,8 @@ Route::prefix('v1')->group(function () {
     // 🔓 PUBLIC ROUTES
     // ============================================
 
-    // 🟢 KEEP-ALIVE HEALTH ENDPOINT (For Render.com / UptimeRobot)
-    Route::get('/health', function () {
-        return response()->json([
-            'status' => 'ok',
-            'timestamp' => now()->toIso8601String(),
-        ]);
-    })->name('health');
+    // 🟢 KEEP-ALIVE HEALTH ENDPOINT
+    Route::get('/health', HealthController::class)->name('health');
 
     Route::prefix('auth')->group(function () {
         Route::post('/login', [AuthController::class, 'login'])->name('auth.login');
