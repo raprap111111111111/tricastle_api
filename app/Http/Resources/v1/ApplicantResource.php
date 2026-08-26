@@ -102,31 +102,36 @@ class ApplicantResource extends JsonResource
                 'current_salary_currency' => $this->current_salary_currency,
             ],
 
-            // ─── Family Details (Fixed: Zero N+1 Queries) ─────────────────
+            // ─── Family Details (ADDED: AIS Family Background Sentences) ───
             'family' => [
                 'father' => [
                     'name'       => $family?->father_name ?? $this->father_name,
-                    'occupation' => $this->father_occupation,
-                    'contact'    => $this->father_contact,
+                    'occupation' => $family?->father_occupation ?? $this->father_occupation,
+                    'contact'    => $family?->father_contact ?? $this->father_contact,
                 ],
                 'mother' => [
                     'name'       => $family?->mother_name ?? $this->mother_name,
-                    'occupation' => $this->mother_occupation,
-                    'contact'    => $this->mother_contact,
+                    'occupation' => $family?->mother_occupation ?? $this->mother_occupation,
+                    'contact'    => $family?->mother_contact ?? $this->mother_contact,
                 ],
                 'spouse' => [
                     'name'        => $family?->spouse_name ?? $this->spouse_name,
                     'occupation'  => $family?->spouse_occupation ?? $this->spouse_occupation,
-                    'contact'     => $this->spouse_contact,
+                    'contact'     => $family?->spouse_contact ?? $this->spouse_contact,
                     'salary'      => $family?->spouse_salary !== null ? (float) $family->spouse_salary : null,
                     'salary_unit' => $family?->spouse_salary_unit,
                 ],
                 'emergency_contact' => [
-                    'name'         => $this->emergency_contact_name,
-                    'relationship' => $this->emergency_contact_relationship,
-                    'phone'        => $this->emergency_contact_phone,
-                    'address'      => $this->emergency_contact_address,
+                    'name'         => $family?->emergency_contact_name ?? $this->emergency_contact_name,
+                    'relationship' => $family?->emergency_contact_relationship ?? $this->emergency_contact_relationship,
+                    'phone'        => $family?->emergency_contact_phone ?? $this->emergency_contact_phone,
+                    'address'      => $family?->emergency_contact_address ?? $this->emergency_contact_address,
                 ],
+                // 🎯 ADDED FOR AIS FAMILY BACKGROUND TEXT
+                'living_situation'     => $family?->living_situation ?? $this->living_situation,
+                'birth_order'          => $family?->birth_order ?? $this->birth_order,
+                'siblings_count'       => $family?->siblings_count ?? $this->siblings_count,
+                'siblings_description' => $family?->siblings_description ?? $this->siblings_description,
             ],
 
             // ─── Japan Contacts ───────────────────────────────────────────
@@ -238,23 +243,6 @@ class ApplicantResource extends JsonResource
                     'deployment_notes'         => $ab->deployment_notes,
                     'cancellation_reason'      => $ab->cancellation_reason,
                     'cancelled_at'             => $ab->cancelled_at?->toIso8601String(),
-                ])
-            ),
-
-            // ─── Legacy batches pivot ─────────────────────────────────────
-            'batches' => $this->whenLoaded(
-                'batches',
-                fn () => $this->batches->map(fn ($batch) => [
-                    'id'           => $batch->id,
-                    'batch_code'   => $batch->batch_code ?? null,
-                    'name'         => $batch->name,
-                    'company_name' => $batch->company?->name,
-                    'pivot'        => [
-                        'status'         => $batch->pivot->status,
-                        'assigned_at'    => $batch->pivot->assigned_at,
-                        'interview_date' => $batch->pivot->interview_date,
-                        'deployed_at'    => $batch->pivot->deployed_at,
-                    ],
                 ])
             ),
 

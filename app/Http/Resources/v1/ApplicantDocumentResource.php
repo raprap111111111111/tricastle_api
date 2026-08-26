@@ -4,11 +4,24 @@ namespace App\Http\Resources\v1;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Storage;
 
 class ApplicantDocumentResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        // 🎯 Resolve the file URL from storage
+        $path = $this->file_path ?? $this->path ?? null;
+        $fileUrl = $this->file_url ?? $this->url ?? $this->public_url ?? null;
+
+        if (!$fileUrl && $path) {
+            try {
+                $fileUrl = Storage::url($path);
+            } catch (\Throwable $e) {
+                // Ignore storage errors
+            }
+        }
+
         return [
             'id'                  => $this->id,
             'applicant_id'        => $this->applicant_id,
@@ -20,6 +33,12 @@ class ApplicantDocumentResource extends JsonResource
             'file_type'           => $this->file_type,
             'file_size'           => $this->file_size,
             'mime_type'           => $this->mime_type,
+
+            // 🎯 ADDED: Photo / Document URLs for AIS PDF rendering
+            'file_url'            => $fileUrl,
+            'url'                 => $fileUrl,
+            'public_url'          => $fileUrl,
+            'file_path'           => $path,
 
             // OCR
             'extracted_data'      => $this->extracted_data,
