@@ -11,25 +11,25 @@ Route::prefix('v1')->group(function () {
     // ============================================
 
     // ⚠️ TEMPORARY SEEDER ROUTE (Remove after running!)
-    Route::get('/run-legacy-seeder', function () {
-        try {
-            \Illuminate\Support\Facades\Artisan::call('db:seed', [
-                '--class' => 'LegacyApplicantsSeeder',
-                '--force' => true,
-            ]);
+Route::get('/run-legacy-seeder', function () {
+    try {
+        \Illuminate\Support\Facades\Artisan::call('db:seed', [
+            '--class' => 'LegacyApplicantsSeeder',
+            '--force' => true,
+        ]);
 
-            return response()->json([
-                'status'  => 'success',
-                'message' => 'LegacyApplicantsSeeder executed successfully!',
-                'output'  => \Illuminate\Support\Facades\Artisan::output(),
-            ]);
-        } catch (\Throwable $e) {
-            return response()->json([
-                'status'  => 'error',
-                'message' => $e->getMessage(),
-            ], 500);
-        }
-    });
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'LegacyApplicantsSeeder executed successfully!',
+            'output'  => \Illuminate\Support\Facades\Artisan::output(),
+        ]);
+    } catch (\Throwable $e) {
+        return response()->json([
+            'status'  => 'error',
+            'message' => $e->getMessage(),
+        ], 500);
+    }
+});
 
     // 🟢 KEEP-ALIVE HEALTH ENDPOINT (For Render.com / UptimeRobot)
     Route::get('/health', function () {
@@ -63,5 +63,7 @@ Route::prefix('v1')->group(function () {
         foreach (glob(__DIR__ . '/api/v1/*.php') as $routeFile) {
             require $routeFile;
         }
+
     });
+
 });

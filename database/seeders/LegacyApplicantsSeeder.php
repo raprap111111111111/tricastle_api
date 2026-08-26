@@ -77,7 +77,7 @@ class LegacyApplicantsSeeder extends Seeder
 
                 if (preg_match('/^[A-Z0-9]{5,8}$/i', $col1) && ! str_contains(strtoupper($col1), 'NUMBER')) {
                     $tNumber = strtoupper($col1);
-                    $shift   = 1; // Leading comma
+                    $shift   = 1; // Leading comma or line number
                 } elseif (preg_match('/^[A-Z0-9]{5,8}$/i', $col0) && ! str_contains(strtoupper($col0), 'NUMBER')) {
                     $tNumber = strtoupper($col0);
                     $shift   = 0; // No leading comma
@@ -107,41 +107,34 @@ class LegacyApplicantsSeeder extends Seeder
                 $lastCode = $tNumber;
 
                 // -------------------------------------------------------------
-                // CORRECTED COLUMN MAPPING (Accounting for $shift offset)
-                // Col 1 ($shift+0)  : T-NUMBER
-                // Col 2 ($shift+1)  : NAME
-                // Col 8 ($shift+7)  : DATE OF BIRTH
-                // Col 9 ($shift+8)  : GENDER
-                // Col 10 ($shift+9) : FIRST BATCH
-                // Col 11 ($shift+10): LATEST BATCH
-                // Col 13 ($shift+12): LATEST COMPANY NAME
+                // EXACT COLUMN MAPPING
                 // -------------------------------------------------------------
-                $dob            = $this->parseDate($cols[$shift + 7] ?? null);                   // DOB
-                $gender         = $this->mapGender($cols[$shift + 8] ?? null);                   // Gender
-                $firstBatchStr  = trim($cols[$shift + 9] ?? '');                                 // First Batch
-                $latestBatchStr = trim($cols[$shift + 10] ?? '');                                // Latest Batch
-                $companyName    = trim($cols[$shift + 12] ?? $cols[$shift + 11] ?? '');          // Company Name
+                $dob            = $this->parseDate($cols[$shift + 7] ?? null);                   // Index 8: DOB
+                $gender         = $this->mapGender($cols[$shift + 8] ?? null);                   // Index 9: Gender
+                $firstBatchStr  = trim($cols[$shift + 9] ?? '');                                 // Index 10: First Batch
+                $latestBatchStr = trim($cols[$shift + 10] ?? '');                                // Index 11: Latest Batch
+                $companyName    = trim($cols[$shift + 12] ?? $cols[$shift + 11] ?? '');          // Index 13: Company Name
 
-                $passportNo     = trim($cols[$shift + 26] ?? $cols[$shift + 27] ?? '') ?: null;        // Passport
-                $passportExpiry = $this->parseDate($cols[$shift + 27] ?? $cols[$shift + 28] ?? null);  // Expiry
+                $passportNo     = trim($cols[$shift + 30] ?? '') ?: null;                        // Index 31: Passport Number
+                $passportExpiry = $this->parseDate($cols[$shift + 31] ?? null);                  // Index 32: Passport Expiry
 
-                // 🗓️ REAL DEPLOYMENT DATE (EMPLOYMENT YEAR & EMPLOYMENT MONTH)
-                $empYear        = trim($cols[$shift + 28] ?? $cols[$shift + 29] ?? '');
-                $empMonth       = trim($cols[$shift + 29] ?? $cols[$shift + 30] ?? '');
-                $flightHist     = trim($cols[$shift + 17] ?? $cols[$shift + 18] ?? '');
+                // 🗓️ DEPLOYMENT DATE (Index 33 = EMPLOYMENT YEAR, Index 34 = EMPLOYMENT MONTH)
+                $empYear        = trim($cols[$shift + 32] ?? '');
+                $empMonth       = trim($cols[$shift + 33] ?? '');
+                $flightHist     = trim($cols[$shift + 19] ?? '');
 
                 $realDeployedAt = $this->parseRealDeploymentDate($empYear, $empMonth, $flightHist);
 
-                $address     = trim($cols[$shift + 31] ?? $cols[$shift + 32] ?? '') ?: null;       
-                $height      = $this->toHeight($cols[$shift + 32] ?? $cols[$shift + 33] ?? null);    
-                $weight      = $this->toWeight($cols[$shift + 33] ?? $cols[$shift + 34] ?? null);    
-                $civilStatus = $this->mapCivilStatus($cols[$shift + 34] ?? $cols[$shift + 35] ?? null);
-                $children    = $this->toChildrenCount($cols[$shift + 35] ?? $cols[$shift + 36] ?? null);
-                $religion    = trim($cols[$shift + 36] ?? $cols[$shift + 37] ?? '') ?: null;
-                $hand        = $this->mapDominantHand($cols[$shift + 37] ?? $cols[$shift + 38] ?? null);
-                $salary      = $this->toSalary($cols[$shift + 40] ?? $cols[$shift + 41] ?? null);
-                $examScore   = $this->toScore($cols[$shift + 42] ?? $cols[$shift + 43] ?? null);
-                $englishPct  = $this->toScore($cols[$shift + 43] ?? $cols[$shift + 44] ?? null);
+                $address     = trim($cols[$shift + 35] ?? '') ?: null;                            // Index 36: Address
+                $height      = $this->toHeight($cols[$shift + 36] ?? null);                       // Index 37: Height
+                $weight      = $this->toWeight($cols[$shift + 37] ?? null);                       // Index 38: Weight
+                $civilStatus = $this->mapCivilStatus($cols[$shift + 38] ?? null);                 // Index 39: Civil Status
+                $children    = $this->toChildrenCount($cols[$shift + 39] ?? null);                // Index 40: Children
+                $religion    = trim($cols[$shift + 40] ?? '') ?: null;                            // Index 41: Religion
+                $hand        = $this->mapDominantHand($cols[$shift + 41] ?? null);                // Index 42: Dominant Hand
+                $salary      = $this->toSalary($cols[$shift + 44] ?? null);                      // Index 45: Salary
+                $examScore   = $this->toScore($cols[$shift + 46] ?? null);                       // Index 47: Exam Result
+                $englishPct  = $this->toScore($cols[$shift + 47] ?? null);                       // Index 48: English %
 
                 $isStaffMember = $this->isStaff($latestBatchStr) || $this->isStaff($firstBatchStr);
                 $status        = $isStaffMember ? ApplicantStatus::Verified : ApplicantStatus::FinalList;
@@ -208,7 +201,7 @@ class LegacyApplicantsSeeder extends Seeder
                     }
                 }
 
-                // Handle Batches & REAL Deployment Dates
+                // Handle Batches & Deployment Records
                 $batchesToProcess = array_filter(array_unique([
                     $this->extractBatchNumber($latestBatchStr),
                     $this->extractBatchNumber($firstBatchStr),
@@ -247,7 +240,7 @@ class LegacyApplicantsSeeder extends Seeder
 
                         $applicantBatch->status             = 'deployed';
                         $applicantBatch->assigned_at        = $realDeployedAt ?? $applicantBatch->assigned_at ?? now();
-                        $applicantBatch->deployed_at        = $realDeployedAt;
+                        $applicantBatch->deployed_at        = $realDeployedAt ?? $applicantBatch->deployed_at ?? now();
                         $applicantBatch->deployment_country = 'Japan';
                         $applicantBatch->deployment_company = $companyName ?: null;
 
