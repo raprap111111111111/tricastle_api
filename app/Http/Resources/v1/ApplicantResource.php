@@ -9,11 +9,14 @@ class ApplicantResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        // Safe relation check to prevent N+1 queries during list fetching
+        $family = $this->relationLoaded('family') ? $this->family : null;
+
         return [
             'id'             => $this->id,
             'applicant_code' => $this->applicant_code,
 
-            // ─── AIS / Trade Test (NEW) ───────────────────────────────────
+            // ─── AIS / Trade Test ─────────────────────────────────────────
             'applied_position'        => $this->applied_position,
             'trade_test_try'          => $this->trade_test_try,
             'trade_test_date'         => $this->trade_test_date?->format('Y-m-d'),
@@ -68,7 +71,7 @@ class ApplicantResource extends JsonResource
             'quality_score' => (float) $this->quality_score,
             'quality_grade' => $this->quality_grade,
 
-            // ─── Japan Deployment Profile (Phase 1) ───────────────────────
+            // ─── Japan Deployment Profile ─────────────────────────────────
             'skill_category'      => $this->skill_category,
             'trade_or_occupation' => $this->trade_or_occupation,
 
@@ -99,24 +102,24 @@ class ApplicantResource extends JsonResource
                 'current_salary_currency' => $this->current_salary_currency,
             ],
 
-            // ─── Family Details (Updated with relational fallback) ────────
+            // ─── Family Details (Fixed: Zero N+1 Queries) ─────────────────
             'family' => [
                 'father' => [
-                    'name'       => $this->family?->father_name ?? $this->father_name,
+                    'name'       => $family?->father_name ?? $this->father_name,
                     'occupation' => $this->father_occupation,
                     'contact'    => $this->father_contact,
                 ],
                 'mother' => [
-                    'name'       => $this->family?->mother_name ?? $this->mother_name,
+                    'name'       => $family?->mother_name ?? $this->mother_name,
                     'occupation' => $this->mother_occupation,
                     'contact'    => $this->mother_contact,
                 ],
                 'spouse' => [
-                    'name'        => $this->family?->spouse_name ?? $this->spouse_name,
-                    'occupation'  => $this->family?->spouse_occupation ?? $this->spouse_occupation,
+                    'name'        => $family?->spouse_name ?? $this->spouse_name,
+                    'occupation'  => $family?->spouse_occupation ?? $this->spouse_occupation,
                     'contact'     => $this->spouse_contact,
-                    'salary'      => $this->family?->spouse_salary !== null ? (float) $this->family->spouse_salary : null,
-                    'salary_unit' => $this->family?->spouse_salary_unit,
+                    'salary'      => $family?->spouse_salary !== null ? (float) $family->spouse_salary : null,
+                    'salary_unit' => $family?->spouse_salary_unit,
                 ],
                 'emergency_contact' => [
                     'name'         => $this->emergency_contact_name,
@@ -126,7 +129,7 @@ class ApplicantResource extends JsonResource
                 ],
             ],
 
-            // ─── Japan Contacts (NEW) ─────────────────────────────────────
+            // ─── Japan Contacts ───────────────────────────────────────────
             'japan_contacts' => $this->whenLoaded(
                 'japanContacts',
                 fn () => ApplicantJapanContactResource::collection($this->japanContacts)
@@ -238,7 +241,7 @@ class ApplicantResource extends JsonResource
                 ])
             ),
 
-            // ─── Legacy batches pivot (backward compat) ───────────────────
+            // ─── Legacy batches pivot ─────────────────────────────────────
             'batches' => $this->whenLoaded(
                 'batches',
                 fn () => $this->batches->map(fn ($batch) => [

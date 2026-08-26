@@ -10,12 +10,9 @@ class ApplicantRepository extends BaseRepository
 {
     protected string $model = Applicant::class;
 
+    // ⚡ Lightweight relations for list view query speed
     protected array $relations = [
-        'assignedStaff',
-        'creator',
-        'family',           
-        'japanContacts',    
-        'applicantBatches.batch',
+        'applicantBatches.batch:id,batch_number,name,country',
     ];
 
     protected array $searchable = [
@@ -28,9 +25,9 @@ class ApplicantRepository extends BaseRepository
         'city',
         'province',
         'trade_or_occupation',
-        'applied_position',   
-        'birthplace',         
-        'religion',           
+        'applied_position',
+        'birthplace',
+        'religion',
     ];
 
     protected array $filterable = [
@@ -42,11 +39,11 @@ class ApplicantRepository extends BaseRepository
         'assigned_staff_id',
         'skill_category',
         'jlpt_level',
-        'applied_position',   
-        'trade_test_try',     
-        'blood_type',         
-        'dominant_hand',      
-        'religion',           
+        'applied_position',
+        'trade_test_try',
+        'blood_type',
+        'dominant_hand',
+        'religion',
     ];
 
     protected array $sortable = [
@@ -63,15 +60,15 @@ class ApplicantRepository extends BaseRepository
         'jlpt_level',
         'years_japan_experience',
         'expected_salary',
-        'applied_position',          
-        'trade_test_date',           
-        'english_proficiency_pct',   
+        'applied_position',
+        'trade_test_date',
+        'english_proficiency_pct',
         'date_of_birth',
         'created_at',
         'updated_at',
     ];
 
-    protected string $defaultOrderBy        = 'id';
+    protected string $defaultOrderBy        = 'created_at';
     protected string $defaultOrderDirection = 'desc';
 
     // ═══════════════════════════════════════════════════════
@@ -84,7 +81,7 @@ class ApplicantRepository extends BaseRepository
         $request = request();
 
         // ──────────────────────────────────────────────────
-        // 🎯 FULL NAME SEARCH (Robust CONCAT_WS ignores null middle names)
+        // 🎯 FULL NAME SEARCH
         // ──────────────────────────────────────────────────
 
         if ($request->filled('search')) {
@@ -96,8 +93,7 @@ class ApplicantRepository extends BaseRepository
                     $q->orWhere($field, 'like', '%' . $search . '%');
                 }
 
-                // 2. Search full-name concatenations for multi-word queries
-                // CONCAT_WS automatically handles NULL middle_names without breaking the string
+                // 2. Search full-name concatenations
                 $q->orWhereRaw("CONCAT_WS(' ', first_name, last_name) LIKE ?", ['%' . $search . '%'])
                   ->orWhereRaw("CONCAT_WS(' ', last_name, first_name) LIKE ?", ['%' . $search . '%'])
                   ->orWhereRaw("CONCAT_WS(', ', last_name, first_name) LIKE ?", ['%' . $search . '%'])
@@ -204,7 +200,7 @@ class ApplicantRepository extends BaseRepository
         }
 
         // ──────────────────────────────────────────────────
-        // Japan deployment filters (Phase 1)
+        // Japan deployment filters
         // ──────────────────────────────────────────────────
 
         if ($request->filled('trade_or_occupation')) {
@@ -263,14 +259,12 @@ class ApplicantRepository extends BaseRepository
             if ($has) {
                 $query->whereHas(
                     'japanContacts',
-                    fn(Builder $q) =>
-                    $q->where('affiliation_type', 'marucon')
+                    fn(Builder $q) => $q->where('affiliation_type', 'marucon')
                 );
             } else {
                 $query->whereDoesntHave(
                     'japanContacts',
-                    fn(Builder $q) =>
-                    $q->where('affiliation_type', 'marucon')
+                    fn(Builder $q) => $q->where('affiliation_type', 'marucon')
                 );
             }
         }
@@ -330,8 +324,6 @@ class ApplicantRepository extends BaseRepository
         return Applicant::with([
             'assignedStaff',
             'creator',
-            'family',
-            'japanContacts',
             'applicantBatches.batch',
         ])->find($id);
     }
