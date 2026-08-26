@@ -10,43 +10,6 @@ Route::prefix('v1')->group(function () {
     // 🔓 PUBLIC ROUTES
     // ============================================
 
-        // ⚠️ TEMPORARY SEEDER ROUTE (Fixed: No missing .env key errors)
-    Route::get('/run-legacy-seeder', function () {
-        // Simple security check: ?key=tricastle2026
-        $providedKey = request()->query('key');
-        
-        if ($providedKey !== 'tricastle2026') {
-            return response()->json([
-                'status'  => 'error',
-                'message' => 'Unauthorized. Please provide ?key=tricastle2026 in the URL.',
-            ], 403);
-        }
-
-        try {
-            // Prevent execution timeout & memory limits for large CSV files
-            set_time_limit(300);
-            ini_set('memory_limit', '512M');
-
-            \Illuminate\Support\Facades\Artisan::call('db:seed', [
-                '--class' => 'LegacyApplicantsSeeder',
-                '--force' => true,
-            ]);
-
-            return response()->json([
-                'status'  => 'success',
-                'message' => 'LegacyApplicantsSeeder executed successfully!',
-                'output'  => \Illuminate\Support\Facades\Artisan::output(),
-            ]);
-        } catch (\Throwable $e) {
-            return response()->json([
-                'status'  => 'error',
-                'message' => $e->getMessage(),
-                'file'    => $e->getFile(),
-                'line'    => $e->getLine(),
-            ], 500);
-        }
-    });
-
     // 🟢 KEEP-ALIVE HEALTH ENDPOINT (For Render.com / UptimeRobot)
     Route::get('/health', function () {
         return response()->json([

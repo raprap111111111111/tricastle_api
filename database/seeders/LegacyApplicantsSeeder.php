@@ -36,16 +36,41 @@ class LegacyApplicantsSeeder extends Seeder
             return;
         }
 
+        $this->command?->info("🚀 Loading pre-fetched database lookups into memory...");
+
+        // -------------------------------------------------------------
+        // 🚀 OPTIMIZATION 1: Pre-fetch existing records into HashMaps
+        // -------------------------------------------------------------
+        $existingApplicants = Applicant::withTrashed()->pluck('id', 'applicant_code')->toArray();
+        $existingBatches    = Batch::withTrashed()->pluck('id', 'batch_number')->toArray();
+        $existingCompanies  = class_exists(Company::class) && Schema::hasTable('companies')
+            ? Company::pluck('id', 'name')->toArray()
+            : [];
+
+        // Pre-fetch links into key "applicantId_batchId"
+        $existingLinks = ApplicantBatch::withTrashed()
+            ->select('id', 'applicant_id', 'batch_id')
+            ->get()
+            ->keyBy(fn ($i) => "{$i->applicant_id}_{$i->batch_id}")
+            ->toArray();
+
         $rowNum         = 0;
         $imported       = 0;
         $updated        = 0;
         $skipped        = 0;
         $linked         = 0;
         $batchesCreated = 0;
-        $firstCode      = null;
-        $lastCode       = null;
 
         DB::disableQueryLog();
+
+        // -------------------------------------------------------------
+        // 🚀 OPTIMIZATION 2: Disable Spatie activity logging temporarily
+        // -------------------------------------------------------------
+        if (function_exists('activity')) {
+            activity()->disableLogging();
+        }
+
+        $this->command?->info("⚡ Starting high-speed processing...");
 
         try {
             DB::beginTransaction();
@@ -53,7 +78,6 @@ class LegacyApplicantsSeeder extends Seeder
             while (($rawLine = fgets($file)) !== false) {
                 $rowNum++;
 
-                // Skip header / instruction rows (first 3 rows)
                 if ($rowNum <= 3) {
                     continue;
                 }
@@ -97,16 +121,8 @@ class LegacyApplicantsSeeder extends Seeder
 
                 [$lastName, $firstName, $middleName] = $this->splitName($rawName);
 
-                if (! $firstCode) {
-                    $firstCode = $tNumber;
-                }
-                $lastCode = $tNumber;
-
-                // Column Mapping
                 $dob            = $this->parseDate($cols[$shift + 7] ?? null);
                 $gender         = $this->mapGender($cols[$shift + 8] ?? null);
-                
-                // Batch columns (Scan index 9 & 10, fallback to adjacent columns if empty)
                 $firstBatchStr  = trim($cols[$shift + 9] ?? '');
                 $latestBatchStr = trim($cols[$shift + 10] ?? '');
 
@@ -145,6 +161,7 @@ class LegacyApplicantsSeeder extends Seeder
                 $status        = $isStaffMember ? ApplicantStatus::Verified : ApplicantStatus::FinalList;
 
                 $payload = [
+                    'applicant_code'          => $tNumber,
                     'first_name'              => $firstName !== '' ? $firstName : $lastName,
                     'middle_name'             => $middleName !== '' ? $middleName : null,
                     'last_name'               => $lastName,
@@ -168,47 +185,41 @@ class LegacyApplicantsSeeder extends Seeder
                     'status'                  => $status,
                     'willing_to_be_deployed'  => true,
                     'japan_deployment_ready'  => ! $isStaffMember,
+                    'deleted_at'              => null,
                 ];
 
-                $applicant = Applicant::withTrashed()->firstOrNew(['applicant_code' => $tNumber]);
-                $wasCreated = ! $applicant->exists;
-
-                if ($applicant->trashed()) {
-                    $applicant->restore();
-                }
-
-                $applicant->fill($payload);
-                $applicant->save();
-
-                if ($wasCreated) {
-                    $imported++;
-                } else {
+                // Check in Memory HashMap instead of sending a SELECT query
+                if (isset($existingApplicants[$tNumber])) {
+                    $applicantId = $existingApplicants[$tNumber];
+                    Applicant::where('id', $applicantId)->update($payload);
                     $updated++;
+                } else {
+                    $applicant   = Applicant::create($payload);
+                    $applicantId = $applicant->id;
+                    $existingApplicants[$tNumber] = $applicantId;
+                    $imported++;
                 }
 
-                // Company Auto-creation
-                if ($companyName !== '' && class_exists(Company::class) && Schema::hasTable('companies')) {
+                // Company Check
+                if ($companyName !== '' && ! isset($existingCompanies[$companyName]) && class_exists(Company::class) && Schema::hasTable('companies')) {
                     try {
                         $compCode = 'COMP-' . strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $companyName));
                         if (strlen($compCode) < 6) {
                             $compCode = 'COMP-' . sprintf('%04d', (int) preg_replace('/\D/', '', $companyName) ?: rand(1000, 9999));
                         }
 
-                        Company::firstOrCreate(
-                            ['name' => $companyName],
-                            [
-                                'code'    => $compCode,
-                                'country' => 'Japan',
-                            ]
-                        );
+                        $comp = Company::create([
+                            'name'    => $companyName,
+                            'code'    => $compCode,
+                            'country' => 'Japan',
+                        ]);
+                        $existingCompanies[$companyName] = $comp->id;
                     } catch (\Throwable $e) {
                         // Suppress
                     }
                 }
 
-                // -------------------------------------------------------------
-                // SAFE BATCH EXTRACTION & ENUM ASSIGNMENT
-                // -------------------------------------------------------------
+                // Batch Check
                 $extractedLatest = $this->extractBatchNumber($latestBatchStr);
                 $extractedFirst  = $this->extractBatchNumber($firstBatchStr);
 
@@ -219,65 +230,72 @@ class LegacyApplicantsSeeder extends Seeder
 
                 if (! $isStaffMember && ! empty($batchesToProcess)) {
                     foreach ($batchesToProcess as $batchNum) {
-                        $batch = Batch::withTrashed()->firstOrNew(['batch_number' => (string) $batchNum]);
+                        $batchKey = (string) $batchNum;
 
-                        if ($batch->trashed()) {
-                            $batch->restore();
-                        }
-
-                        if (! $batch->exists) {
-                            $batch->batch_number = (string) $batchNum;
-                            $batch->name         = "Batch {$batchNum}";
-                            $batch->country      = 'Japan';
-                            $batch->status       = $this->resolveBatchStatus('ongoing');
-                            $batch->is_active    = false;
-                            $batch->save();
+                        if (isset($existingBatches[$batchKey])) {
+                            $batchId = $existingBatches[$batchKey];
+                            if ($realDeployedAt) {
+                                Batch::where('id', $batchId)->whereNull('deployment_date')->update([
+                                    'deployment_date' => Carbon::parse($realDeployedAt)->toDateString(),
+                                ]);
+                            }
+                        } else {
+                            $batch = Batch::create([
+                                'batch_number'    => $batchKey,
+                                'name'            => "Batch {$batchKey}",
+                                'country'         => 'Japan',
+                                'status'          => $this->resolveBatchStatus('ongoing'),
+                                'is_active'       => false,
+                                'deployment_date' => $realDeployedAt ? Carbon::parse($realDeployedAt)->toDateString() : null,
+                            ]);
+                            $batchId = $batch->id;
+                            $existingBatches[$batchKey] = $batchId;
                             $batchesCreated++;
                         }
 
-                        if ($realDeployedAt && ! $batch->deployment_date) {
-                            $batch->deployment_date = Carbon::parse($realDeployedAt)->toDateString();
-                            $batch->save();
+                        // Link Check
+                        $linkKey = "{$applicantId}_{$batchId}";
+                        if (! isset($existingLinks[$linkKey])) {
+                            ApplicantBatch::create([
+                                'applicant_id'       => $applicantId,
+                                'batch_id'           => $batchId,
+                                'status'             => 'deployed',
+                                'assigned_at'        => $realDeployedAt ?? now(),
+                                'deployed_at'        => $realDeployedAt ?? now(),
+                                'deployment_country' => 'Japan',
+                                'deployment_company' => $companyName ?: null,
+                            ]);
+                            $existingLinks[$linkKey] = true;
+                            $linked++;
                         }
-
-                        $applicantBatch = ApplicantBatch::withTrashed()->firstOrNew([
-                            'applicant_id' => $applicant->id,
-                            'batch_id'     => $batch->id,
-                        ]);
-
-                        if ($applicantBatch->trashed()) {
-                            $applicantBatch->restore();
-                        }
-
-                        $applicantBatch->status             = 'deployed';
-                        $applicantBatch->assigned_at        = $realDeployedAt ?? $applicantBatch->assigned_at ?? now();
-                        $applicantBatch->deployed_at        = $realDeployedAt ?? $applicantBatch->deployed_at ?? now();
-                        $applicantBatch->deployment_country = 'Japan';
-                        $applicantBatch->deployment_company = $companyName ?: null;
-
-                        $applicantBatch->save();
-
-                        $linked++;
                     }
+                }
+
+                if ($rowNum % 500 === 0) {
+                    $this->command?->info("...processed {$rowNum} rows (Applicants: {$imported}, Batches: {$batchesCreated})");
                 }
             }
 
             DB::commit();
             fclose($file);
 
-            Log::info("LegacySeeder Completed", [
-                'rows'           => $rowNum,
-                'imported'       => $imported,
-                'batchesCreated' => $batchesCreated,
-                'linked'         => $linked,
-            ]);
+            if (function_exists('activity')) {
+                activity()->enableLogging();
+            }
 
-            $this->command?->info("✅ Seeder finished! Batches created: {$batchesCreated}, Links created: {$linked}");
+            $this->command?->info("✅ Seeder completed successfully!");
+            $this->command?->table(
+                ['Total CSV Lines', 'Created', 'Updated', 'Skipped', 'Batches Created', 'Links Created'],
+                [[$rowNum, $imported, $updated, $skipped, $batchesCreated, $linked]]
+            );
 
         } catch (\Throwable $e) {
             DB::rollBack();
             if (isset($file) && is_resource($file)) {
                 fclose($file);
+            }
+            if (function_exists('activity')) {
+                activity()->enableLogging();
             }
 
             Log::error('LegacyApplicantsSeeder failed', [
@@ -289,9 +307,6 @@ class LegacyApplicantsSeeder extends Seeder
         }
     }
 
-    /**
-     * Safely resolve BatchStatus Enum vs String
-     */
     private function resolveBatchStatus(string $desired = 'ongoing'): mixed
     {
         if (class_exists(BatchStatus::class)) {
@@ -316,7 +331,6 @@ class LegacyApplicantsSeeder extends Seeder
             return null;
         }
 
-        // Extracts digits from "BATCH 12", "B-02", "12", "#5"
         if (preg_match('/(\d+)/', $batchStr, $m)) {
             return (string) (int) $m[1];
         }
