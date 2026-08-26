@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Enums\ApplicantStatus;
+use App\Enums\BatchStatus;
 use App\Models\Applicant;
 use App\Models\ApplicantBatch;
 use App\Models\Batch;
@@ -25,11 +26,9 @@ class LegacyApplicantsSeeder extends Seeder
         }
 
         if (filesize($filePath) === 0) {
-            $this->command?->error("❌ CSV file is empty (0 bytes). Please save/export the data from WPS Office first.");
+            $this->command?->error("❌ CSV file is empty (0 bytes).");
             return;
         }
-
-        $this->command?->info('🚀 Overwriting legacy applicants with EXACT CSV deployment dates...');
 
         $file = fopen($filePath, 'r');
         if (! $file) {
@@ -64,11 +63,9 @@ class LegacyApplicantsSeeder extends Seeder
                     continue;
                 }
 
-                // Sanitize standalone unescaped quotes
                 $sanitizedLine = preg_replace('/(?<!^)(?<!,)"(?!,)(?!$)/', '', $cleanLine);
                 $cols          = str_getcsv($sanitizedLine, ',');
 
-                // Detect T-Number position & shift
                 $tNumber = '';
                 $shift   = 0;
 
@@ -77,10 +74,10 @@ class LegacyApplicantsSeeder extends Seeder
 
                 if (preg_match('/^[A-Z0-9]{5,8}$/i', $col1) && ! str_contains(strtoupper($col1), 'NUMBER')) {
                     $tNumber = strtoupper($col1);
-                    $shift   = 1; // Leading comma or line number
+                    $shift   = 1;
                 } elseif (preg_match('/^[A-Z0-9]{5,8}$/i', $col0) && ! str_contains(strtoupper($col0), 'NUMBER')) {
                     $tNumber = strtoupper($col0);
-                    $shift   = 0; // No leading comma
+                    $shift   = 0;
                 }
 
                 if (empty($tNumber) || str_contains($tNumber, 'TRICASTLE') || str_contains($tNumber, 'T-NUMBER') || str_contains($tNumber, 'UNDECIDED')) {
@@ -88,7 +85,6 @@ class LegacyApplicantsSeeder extends Seeder
                     continue;
                 }
 
-                // Resolve Name
                 $rawName = trim($cols[$shift + 1] ?? '');
                 if (empty($rawName) || $rawName === $tNumber) {
                     $rawName = trim($cols[$shift + 4] ?? $cols[$shift + 3] ?? $cols[$shift + 2] ?? '');
@@ -106,35 +102,44 @@ class LegacyApplicantsSeeder extends Seeder
                 }
                 $lastCode = $tNumber;
 
-                // -------------------------------------------------------------
-                // EXACT COLUMN MAPPING
-                // -------------------------------------------------------------
-                $dob            = $this->parseDate($cols[$shift + 7] ?? null);                   // Index 8: DOB
-                $gender         = $this->mapGender($cols[$shift + 8] ?? null);                   // Index 9: Gender
-                $firstBatchStr  = trim($cols[$shift + 9] ?? '');                                 // Index 10: First Batch
-                $latestBatchStr = trim($cols[$shift + 10] ?? '');                                // Index 11: Latest Batch
-                $companyName    = trim($cols[$shift + 12] ?? $cols[$shift + 11] ?? '');          // Index 13: Company Name
+                // Column Mapping
+                $dob            = $this->parseDate($cols[$shift + 7] ?? null);
+                $gender         = $this->mapGender($cols[$shift + 8] ?? null);
+                
+                // Batch columns (Scan index 9 & 10, fallback to adjacent columns if empty)
+                $firstBatchStr  = trim($cols[$shift + 9] ?? '');
+                $latestBatchStr = trim($cols[$shift + 10] ?? '');
 
-                $passportNo     = trim($cols[$shift + 30] ?? '') ?: null;                        // Index 31: Passport Number
-                $passportExpiry = $this->parseDate($cols[$shift + 31] ?? null);                  // Index 32: Passport Expiry
+                if ($firstBatchStr === '' && $latestBatchStr === '') {
+                    for ($i = 8; $i <= 12; $i++) {
+                        $candidate = trim($cols[$shift + $i] ?? '');
+                        if (preg_match('/batch\s*#?\d+/i', $candidate) || preg_match('/^\d{1,3}$/', $candidate)) {
+                            $latestBatchStr = $candidate;
+                            break;
+                        }
+                    }
+                }
 
-                // 🗓️ DEPLOYMENT DATE (Index 33 = EMPLOYMENT YEAR, Index 34 = EMPLOYMENT MONTH)
+                $companyName    = trim($cols[$shift + 12] ?? $cols[$shift + 11] ?? '');
+                $passportNo     = trim($cols[$shift + 30] ?? '') ?: null;
+                $passportExpiry = $this->parseDate($cols[$shift + 31] ?? null);
+
                 $empYear        = trim($cols[$shift + 32] ?? '');
                 $empMonth       = trim($cols[$shift + 33] ?? '');
                 $flightHist     = trim($cols[$shift + 19] ?? '');
 
                 $realDeployedAt = $this->parseRealDeploymentDate($empYear, $empMonth, $flightHist);
 
-                $address     = trim($cols[$shift + 35] ?? '') ?: null;                            // Index 36: Address
-                $height      = $this->toHeight($cols[$shift + 36] ?? null);                       // Index 37: Height
-                $weight      = $this->toWeight($cols[$shift + 37] ?? null);                       // Index 38: Weight
-                $civilStatus = $this->mapCivilStatus($cols[$shift + 38] ?? null);                 // Index 39: Civil Status
-                $children    = $this->toChildrenCount($cols[$shift + 39] ?? null);                // Index 40: Children
-                $religion    = trim($cols[$shift + 40] ?? '') ?: null;                            // Index 41: Religion
-                $hand        = $this->mapDominantHand($cols[$shift + 41] ?? null);                // Index 42: Dominant Hand
-                $salary      = $this->toSalary($cols[$shift + 44] ?? null);                      // Index 45: Salary
-                $examScore   = $this->toScore($cols[$shift + 46] ?? null);                       // Index 47: Exam Result
-                $englishPct  = $this->toScore($cols[$shift + 47] ?? null);                       // Index 48: English %
+                $address     = trim($cols[$shift + 35] ?? '') ?: null;
+                $height      = $this->toHeight($cols[$shift + 36] ?? null);
+                $weight      = $this->toWeight($cols[$shift + 37] ?? null);
+                $civilStatus = $this->mapCivilStatus($cols[$shift + 38] ?? null);
+                $children    = $this->toChildrenCount($cols[$shift + 39] ?? null);
+                $religion    = trim($cols[$shift + 40] ?? '') ?: null;
+                $hand        = $this->mapDominantHand($cols[$shift + 41] ?? null);
+                $salary      = $this->toSalary($cols[$shift + 44] ?? null);
+                $examScore   = $this->toScore($cols[$shift + 46] ?? null);
+                $englishPct  = $this->toScore($cols[$shift + 47] ?? null);
 
                 $isStaffMember = $this->isStaff($latestBatchStr) || $this->isStaff($firstBatchStr);
                 $status        = $isStaffMember ? ApplicantStatus::Verified : ApplicantStatus::FinalList;
@@ -181,7 +186,7 @@ class LegacyApplicantsSeeder extends Seeder
                     $updated++;
                 }
 
-                // Safe Auto-Create Company
+                // Company Auto-creation
                 if ($companyName !== '' && class_exists(Company::class) && Schema::hasTable('companies')) {
                     try {
                         $compCode = 'COMP-' . strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $companyName));
@@ -197,37 +202,43 @@ class LegacyApplicantsSeeder extends Seeder
                             ]
                         );
                     } catch (\Throwable $e) {
-                        // Suppress company creation error
+                        // Suppress
                     }
                 }
 
-                // Handle Batches & Deployment Records
-                $batchesToProcess = array_filter(array_unique([
-                    $this->extractBatchNumber($latestBatchStr),
-                    $this->extractBatchNumber($firstBatchStr),
-                ]));
+                // -------------------------------------------------------------
+                // SAFE BATCH EXTRACTION & ENUM ASSIGNMENT
+                // -------------------------------------------------------------
+                $extractedLatest = $this->extractBatchNumber($latestBatchStr);
+                $extractedFirst  = $this->extractBatchNumber($firstBatchStr);
+
+                $batchesToProcess = array_values(array_unique(array_filter(
+                    [$extractedLatest, $extractedFirst],
+                    fn ($v) => $v !== null && $v !== ''
+                )));
 
                 if (! $isStaffMember && ! empty($batchesToProcess)) {
                     foreach ($batchesToProcess as $batchNum) {
-                        $batch = Batch::withTrashed()->firstOrNew(['batch_number' => $batchNum]);
+                        $batch = Batch::withTrashed()->firstOrNew(['batch_number' => (string) $batchNum]);
 
                         if ($batch->trashed()) {
                             $batch->restore();
                         }
 
                         if (! $batch->exists) {
-                            $batch->name      = "Batch {$batchNum}";
-                            $batch->country   = 'Japan';
-                            $batch->status    = 'ongoing';
-                            $batch->is_active = false;
+                            $batch->batch_number = (string) $batchNum;
+                            $batch->name         = "Batch {$batchNum}";
+                            $batch->country      = 'Japan';
+                            $batch->status       = $this->resolveBatchStatus('ongoing');
+                            $batch->is_active    = false;
+                            $batch->save();
                             $batchesCreated++;
                         }
 
-                        if ($realDeployedAt) {
+                        if ($realDeployedAt && ! $batch->deployment_date) {
                             $batch->deployment_date = Carbon::parse($realDeployedAt)->toDateString();
+                            $batch->save();
                         }
-
-                        $batch->save();
 
                         $applicantBatch = ApplicantBatch::withTrashed()->firstOrNew([
                             'applicant_id' => $applicant->id,
@@ -249,21 +260,20 @@ class LegacyApplicantsSeeder extends Seeder
                         $linked++;
                     }
                 }
-
-                if ($rowNum % 500 === 0) {
-                    $this->command?->info("...processed {$rowNum} lines (Batches: {$batchesCreated})");
-                }
             }
 
             DB::commit();
             fclose($file);
 
-            $this->command?->info("✅ Legacy applicants seed completed!");
-            $this->command?->info("📌 Code Range Processed: [ {$firstCode} ] to [ {$lastCode} ]");
-            $this->command?->table(
-                ['Total CSV Lines', 'Created', 'Updated', 'Skipped', 'Batches Created', 'Batch Links'],
-                [[$rowNum, $imported, $updated, $skipped, $batchesCreated, $linked]]
-            );
+            Log::info("LegacySeeder Completed", [
+                'rows'           => $rowNum,
+                'imported'       => $imported,
+                'batchesCreated' => $batchesCreated,
+                'linked'         => $linked,
+            ]);
+
+            $this->command?->info("✅ Seeder finished! Batches created: {$batchesCreated}, Links created: {$linked}");
+
         } catch (\Throwable $e) {
             DB::rollBack();
             if (isset($file) && is_resource($file)) {
@@ -275,9 +285,43 @@ class LegacyApplicantsSeeder extends Seeder
                 'trace'   => $e->getTraceAsString(),
             ]);
 
-            $this->command?->error('❌ Seed failed: ' . $e->getMessage());
             throw $e;
         }
+    }
+
+    /**
+     * Safely resolve BatchStatus Enum vs String
+     */
+    private function resolveBatchStatus(string $desired = 'ongoing'): mixed
+    {
+        if (class_exists(BatchStatus::class)) {
+            return BatchStatus::tryFrom($desired)
+                ?? BatchStatus::tryFrom(strtoupper($desired))
+                ?? BatchStatus::cases()[0]
+                ?? $desired;
+        }
+
+        return $desired;
+    }
+
+    private function extractBatchNumber(string $batchStr): ?string
+    {
+        $batchStr = trim($batchStr);
+        if ($batchStr === '' || $this->isStaff($batchStr)) {
+            return null;
+        }
+
+        $upper = strtoupper($batchStr);
+        if (in_array($upper, ['UNDECIDED', 'PENDING', 'NONE', 'N/A', 'NO BATCH', 'CANCELLED', 'REJECTED'])) {
+            return null;
+        }
+
+        // Extracts digits from "BATCH 12", "B-02", "12", "#5"
+        if (preg_match('/(\d+)/', $batchStr, $m)) {
+            return (string) (int) $m[1];
+        }
+
+        return null;
     }
 
     private function parseRealDeploymentDate(string $year, string $month, string $flightHist = ''): ?string
@@ -293,20 +337,6 @@ class LegacyApplicantsSeeder extends Seeder
 
         if ($flightHist !== '' && preg_match('/(19|20)\d{2}/', $flightHist, $m)) {
             return Carbon::createFromDate((int) $m[0], 1, 1)->format('Y-m-d H:i:s');
-        }
-
-        return null;
-    }
-
-    private function extractBatchNumber(string $batchStr): ?int
-    {
-        $batchStr = trim($batchStr);
-        if ($batchStr === '' || $this->isStaff($batchStr)) {
-            return null;
-        }
-
-        if (preg_match('/#?(\d+)/', $batchStr, $m)) {
-            return (int) $m[1];
         }
 
         return null;
