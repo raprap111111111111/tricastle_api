@@ -21,6 +21,9 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
 
+        // 🎯 Trust Render's reverse proxy so Laravel knows requests are HTTPS
+        $middleware->trustProxies(at: '*');
+
         // ✅ Return JSON 401 instead of redirecting to 'login' route
         $middleware->redirectGuestsTo(function (Request $request) {
             if ($request->is('api/*') || $request->expectsJson()) {
@@ -41,7 +44,6 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
 
-            // ─── 422 Duplicate Applicant (custom) ─────────────────────
             if ($e instanceof DuplicateApplicantException) {
                 return response()->json([
                     'success'    => false,
@@ -50,7 +52,6 @@ return Application::configure(basePath: dirname(__DIR__))
                 ], 422);
             }
 
-            // ─── 401 Unauthenticated ──────────────────────────────────
             if ($e instanceof AuthenticationException) {
                 return response()->json([
                     'success' => false,
@@ -58,7 +59,6 @@ return Application::configure(basePath: dirname(__DIR__))
                 ], 401);
             }
 
-            // ─── 403 Unauthorized ─────────────────────────────────────
             if ($e instanceof AuthorizationException) {
                 return response()->json([
                     'success' => false,
@@ -66,7 +66,6 @@ return Application::configure(basePath: dirname(__DIR__))
                 ], 403);
             }
 
-            // ─── 404 Model Not Found ──────────────────────────────────
             if ($e instanceof ModelNotFoundException) {
                 $model = class_basename($e->getModel());
 
@@ -76,7 +75,6 @@ return Application::configure(basePath: dirname(__DIR__))
                 ], 404);
             }
 
-            // ─── 404 Route Not Found ──────────────────────────────────
             if ($e instanceof NotFoundHttpException) {
                 return response()->json([
                     'success' => false,
@@ -84,7 +82,6 @@ return Application::configure(basePath: dirname(__DIR__))
                 ], 404);
             }
 
-            // ─── 405 Method Not Allowed ───────────────────────────────
             if ($e instanceof MethodNotAllowedHttpException) {
                 return response()->json([
                     'success' => false,
@@ -92,7 +89,6 @@ return Application::configure(basePath: dirname(__DIR__))
                 ], 405);
             }
 
-            // ─── 422 Validation ───────────────────────────────────────
             if ($e instanceof ValidationException) {
                 return response()->json([
                     'success' => false,
@@ -101,7 +97,6 @@ return Application::configure(basePath: dirname(__DIR__))
                 ], 422);
             }
 
-            // ─── 500 Server Error ─────────────────────────────────────
             return response()->json([
                 'success' => false,
                 'message' => 'Server error. Please try again later.',

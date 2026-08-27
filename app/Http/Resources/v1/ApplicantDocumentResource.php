@@ -30,7 +30,6 @@ class ApplicantDocumentResource extends JsonResource
                 /** @var FilesystemAdapter $disk */
                 $disk = Storage::disk($diskName);
 
-                // For private cloud buckets (R2 / S3), use temporary signed URLs (valid 4 hrs)
                 if (in_array($diskName, ['r2', 's3']) && method_exists($disk, 'temporaryUrl')) {
                     $fileUrl = $disk->temporaryUrl($path, now()->addHours(4));
                 } else {
@@ -41,13 +40,18 @@ class ApplicantDocumentResource extends JsonResource
             }
         }
 
-        // 3. 🎯 BULLETPROOF FALLBACK: If storage URL is still null or relative, route through API stream
+        // 3. Fallback: Route through API stream
         if (!$fileUrl || !str_starts_with($fileUrl, 'http')) {
             if ($this->id) {
                 $fileUrl = url("/api/v1/applicant-documents/{$this->id}/file");
             } elseif ($path) {
                 $fileUrl = url("/storage/{$path}");
             }
+        }
+
+        // 🎯 FORCE HTTPS scheme to fix Mixed Content errors on Vercel
+        if ($fileUrl && str_starts_with($fileUrl, 'http://') && !str_contains($fileUrl, 'localhost') && !str_contains($fileUrl, '127.0.0.1')) {
+            $fileUrl = str_replace('http://', 'https://', $fileUrl);
         }
 
         return [
@@ -62,7 +66,7 @@ class ApplicantDocumentResource extends JsonResource
             'file_size'           => $this->file_size ?? $this->fileRepository?->file_size,
             'mime_type'           => $this->mime_type ?? $this->fileRepository?->mime_type,
 
-            // 🎯 GUARANTEED NON-NULL URLS FOR FRONTEND & PDF GENERATION
+            // Guaranteed HTTPS URLs
             'file_url'            => $fileUrl,
             'url'                 => $fileUrl,
             'public_url'          => $fileUrl,

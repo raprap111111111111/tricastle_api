@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Policies\ApplicantPolicy;
 use App\Policies\UserPolicy;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -18,6 +19,11 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // 🎯 Force HTTPS scheme on production/Render
+        if (config('app.env') !== 'local' || request()->header('X-Forwarded-Proto') === 'https') {
+            URL::forceScheme('https');
+        }
+        
         // ============================================
         // ✅ Super Admin bypasses ALL policy checks
         // ============================================
