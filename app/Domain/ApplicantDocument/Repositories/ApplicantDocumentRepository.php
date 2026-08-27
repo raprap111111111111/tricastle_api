@@ -10,9 +10,11 @@ class ApplicantDocumentRepository extends BaseRepository
 {
     protected string $model = ApplicantDocument::class;
 
+    // 🎯 ADDED 'fileRepository' so file paths and R2 disk metadata eager-load efficiently
     protected array $relations = [
         'applicant',
         'documentType',
+        'fileRepository',
         'uploader',
         'verifier',
         'rejector',
@@ -53,6 +55,10 @@ class ApplicantDocumentRepository extends BaseRepository
         $query   = parent::query();
         $request = request();
 
+        // ──────────────────────────────────────────────────
+        // Version & Expiry Filters
+        // ──────────────────────────────────────────────────
+
         if ($request->boolean('current_version_only')) {
             $query->currentVersion();
         }
@@ -64,6 +70,16 @@ class ApplicantDocumentRepository extends BaseRepository
 
         if ($request->boolean('urgent_only')) {
             $query->urgent();
+        }
+
+        // ──────────────────────────────────────────────────
+        // 🎯 BATCH FILTER (Supports filtering documents by Training Batch)
+        // ──────────────────────────────────────────────────
+        if ($request->filled('batch_id')) {
+            $batchId = (int) $request->input('batch_id');
+            $query->whereHas('applicant.applicantBatches', function (Builder $q) use ($batchId) {
+                $q->where('batch_id', $batchId);
+            });
         }
 
         return $query;
