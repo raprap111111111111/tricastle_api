@@ -218,7 +218,7 @@ class ApplicantDocumentController extends Controller
      * GET /applicant-documents/{applicantDocument}/file
      * GET /applicant-documents/{applicantDocument}/preview
      */
-        /**
+    /**
      * Stream file inline (Supports local, public, r2, and s3)
      * GET /api/v1/applicant-documents/{applicantDocument}/preview
      * GET /api/v1/applicant-documents/{applicantDocument}/file
@@ -241,7 +241,8 @@ class ApplicantDocumentController extends Controller
                 if ($diskInstance->providesTemporaryUrls()) {
                     return redirect()->away($diskInstance->temporaryUrl($path, now()->addMinutes(30)));
                 }
-            } catch (\Throwable $e) {}
+            } catch (\Throwable $e) {
+            }
 
             return response()->stream(
                 function () use ($diskInstance, $path) {
@@ -328,7 +329,8 @@ class ApplicantDocumentController extends Controller
     }
 }
 
-function echoStream($stream) {
+function echoStream($stream)
+{
     if (!$stream) return;
     while (!feof($stream)) {
         echo fread($stream, 1024 * 8);
