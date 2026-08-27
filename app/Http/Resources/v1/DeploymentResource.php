@@ -35,7 +35,7 @@ class DeploymentResource extends JsonResource
             'monthly_salary'   => $this->monthly_salary,
             'salary_currency'  => $this->salary_currency,
 
-            'applicant' => $this->whenLoaded('applicant', fn () => [
+            'applicant' => $this->whenLoaded('applicant', fn() => [
                 'id'              => $this->applicant->id,
                 'applicant_code'  => $this->applicant->applicant_code,
                 'first_name'      => $this->applicant->first_name,
@@ -58,7 +58,7 @@ class DeploymentResource extends JsonResource
                 'updated_at'       => $this->updated_at?->toIso8601String(),
 
                 // Add extra applicant info back in
-                'applicant' => $this->whenLoaded('applicant', fn () => [
+                'applicant' => $this->whenLoaded('applicant', fn() => [
                     'id'              => $this->applicant->id,
                     'applicant_code'  => $this->applicant->applicant_code,
                     'first_name'      => $this->applicant->first_name,
@@ -74,7 +74,7 @@ class DeploymentResource extends JsonResource
                     'status'          => $this->applicant->status,
                 ]),
 
-                'batch' => $this->whenLoaded('batch', fn () => [
+                'batch' => $this->whenLoaded('batch', fn() => [
                     'id'           => $this->batch->id,
                     'name'         => $this->batch->name,
                     'batch_number' => $this->batch->batch_number,
@@ -83,7 +83,7 @@ class DeploymentResource extends JsonResource
                     'status'       => $this->batch->status ?? null,
                 ]),
 
-                'processed_by' => $this->whenLoaded('processedBy', fn () => [
+                'processed_by' => $this->whenLoaded('processedBy', fn() => [
                     'id'         => $this->processedBy->id,
                     'full_name'  => trim("{$this->processedBy->first_name} {$this->processedBy->last_name}"),
                     'first_name' => $this->processedBy->first_name,
@@ -91,7 +91,7 @@ class DeploymentResource extends JsonResource
                     'email'      => $this->processedBy->email,
                 ]),
 
-                'cancelled_by' => $this->whenLoaded('cancelledBy', fn () => $this->cancelledBy ? [
+                'cancelled_by' => $this->whenLoaded('cancelledBy', fn() => $this->cancelledBy ? [
                     'id'         => $this->cancelledBy->id,
                     'full_name'  => trim("{$this->cancelledBy->first_name} {$this->cancelledBy->last_name}"),
                     'first_name' => $this->cancelledBy->first_name,
