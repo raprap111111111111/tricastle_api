@@ -10,7 +10,7 @@ Route::prefix('applicant-documents')->group(function () {
     Route::get('/',  [ApplicantDocumentController::class, 'index']);
     Route::post('/', [ApplicantDocumentController::class, 'store']);
 
-    // ── ✅ NEW: Expiring documents (derived alerts) ───────────────────────
+    // ── Expiring documents ────────────────────────────────────────────────
     Route::get('/expiring', [ApplicantDocumentController::class, 'expiring']);
 
     // ── Level 1 — Batches ─────────────────────────────────────────────────
@@ -36,14 +36,17 @@ Route::prefix('applicant-documents')->group(function () {
     Route::post('/{applicantDocument}/versions',  [ApplicantDocumentController::class, 'uploadVersion'])
         ->whereNumber('applicantDocument');
 
-    // ── File streaming ─────────────────────────────────────────────────────
-    Route::get('/{applicantDocument}/preview',    [ApplicantDocumentController::class, 'preview'])
+    // ── 🎯 File streaming routes (Bypasses /storage/ 404 errors!) ──────────
+    Route::get('/{applicantDocument}/preview',   [ApplicantDocumentController::class, 'preview'])
         ->whereNumber('applicantDocument');
 
-    Route::get('/{applicantDocument}/download',   [ApplicantDocumentController::class, 'download'])
+    Route::get('/{applicantDocument}/file',      [ApplicantDocumentController::class, 'file'])
         ->whereNumber('applicantDocument');
 
-    // ── Single document CRUD (must be LAST — wildcard) ────────────────────
+    Route::get('/{applicantDocument}/download',  [ApplicantDocumentController::class, 'download'])
+        ->whereNumber('applicantDocument');
+
+    // ── Single document CRUD (Wildcard MUST BE LAST) ──────────────────────
     Route::get('/{applicantDocument}',    [ApplicantDocumentController::class, 'show'])
         ->whereNumber('applicantDocument');
 

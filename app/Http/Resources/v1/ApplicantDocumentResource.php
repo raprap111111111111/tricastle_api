@@ -11,45 +11,28 @@ class ApplicantDocumentResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        // 1. Resolve path from direct attribute or fileRepository relation
-        $path = $this->file_path
-            ?? $this->path
-            ?? $this->fileRepository?->file_path
-            ?? $this->fileRepository?->path
-            ?? null;
-
-        // 2. Resolve disk (r2, s3, public, local)
-        $diskName = $this->disk
-            ?? $this->fileRepository?->disk
-            ?? config('filesystems.default', 'public');
+        $path = $this->file_path ?? $this->path ?? $this->fileRepository?->file_path ?? null;
+        $diskName = $this->disk ?? $this->fileRepository?->disk ?? config('filesystems.default', 'public');
 
         $fileUrl = null;
 
-        if ($path) {
+        // 1. If stored on Cloud Storage (R2 / S3), generate temporary signed URL
+        if ($path && in_array($diskName, ['r2', 's3'])) {
             try {
                 /** @var FilesystemAdapter $disk */
                 $disk = Storage::disk($diskName);
-
-                if (in_array($diskName, ['r2', 's3']) && method_exists($disk, 'temporaryUrl')) {
+                if (method_exists($disk, 'temporaryUrl')) {
                     $fileUrl = $disk->temporaryUrl($path, now()->addHours(4));
-                } else {
-                    $fileUrl = $disk->url($path);
                 }
-            } catch (\Throwable $e) {
-                // Silently fallback if disk is improperly configured
-            }
+            } catch (\Throwable $e) {}
         }
 
-        // 3. Fallback: Route through API stream
-        if (!$fileUrl || !str_starts_with($fileUrl, 'http')) {
-            if ($this->id) {
-                $fileUrl = url("/api/v1/applicant-documents/{$this->id}/file");
-            } elseif ($path) {
-                $fileUrl = url("/storage/{$path}");
-            }
+        // 2. 🎯 DEFAULT SAFE URL: Stream through API (Bypasses 404 /storage/ issues!)
+        if (!$fileUrl && $this->id) {
+            $fileUrl = url("/api/v1/applicant-documents/{$this->id}/preview");
         }
 
-        // 🎯 FORCE HTTPS scheme to fix Mixed Content errors on Vercel
+        // 3. Force HTTPS scheme on production
         if ($fileUrl && str_starts_with($fileUrl, 'http://') && !str_contains($fileUrl, 'localhost') && !str_contains($fileUrl, '127.0.0.1')) {
             $fileUrl = str_replace('http://', 'https://', $fileUrl);
         }
@@ -60,49 +43,40 @@ class ApplicantDocumentResource extends JsonResource
             'document_type_id'    => $this->document_type_id,
             'file_repository_id'  => $this->file_repository_id,
 
-            // File Info
             'file_name'           => $this->file_name ?? $this->fileRepository?->original_name,
             'file_type'           => $this->file_type ?? $this->fileRepository?->extension,
             'file_size'           => $this->file_size ?? $this->fileRepository?->file_size,
             'mime_type'           => $this->mime_type ?? $this->fileRepository?->mime_type,
 
-            // Guaranteed HTTPS URLs
+            // 🎯 GUARANTEED WORKING HTTPS STREAMING URL
             'file_url'            => $fileUrl,
             'url'                 => $fileUrl,
             'public_url'          => $fileUrl,
             'file_path'           => $path,
 
-            // OCR
             'extracted_data'      => $this->extracted_data,
             'validated_data'      => $this->validated_data,
             'ocr_confidence'      => $this->ocr_confidence,
 
-            // Status
             'status'              => $this->status,
             'priority'            => $this->priority,
 
-            // Dates
             'document_date'       => $this->document_date?->toDateString(),
             'expiry_date'         => $this->expiry_date?->toDateString(),
             'is_expired'          => $this->is_expired,
             'expiry_notified'     => $this->expiry_notified,
 
-            // Versioning
             'version'             => $this->version,
             'is_current_version'  => $this->is_current_version,
 
-            // Verification
             'last_verified_at'    => $this->last_verified_at?->toDateTimeString(),
 
-            // Rejection
             'rejection_reason'    => $this->rejection_reason,
             'rejected_at'         => $this->rejected_at?->toDateTimeString(),
 
-            // Notes
             'notes'               => $this->notes,
             'metadata'            => $this->metadata,
 
-            // Relations
             'applicant'           => $this->whenLoaded('applicant', fn () => [
                 'id'        => $this->applicant->id,
                 'full_name' => $this->applicant->full_name,
@@ -112,18 +86,6 @@ class ApplicantDocumentResource extends JsonResource
                 'id'   => $this->documentType->id,
                 'name' => $this->documentType->name,
                 'code' => $this->documentType->code,
-            ]),
-            'uploader'            => $this->whenLoaded('uploader', fn () => [
-                'id'   => $this->uploader->id,
-                'name' => $this->uploader->name,
-            ]),
-            'verifier'            => $this->whenLoaded('verifier', fn () => [
-                'id'   => $this->verifier->id,
-                'name' => $this->verifier->name,
-            ]),
-            'rejector'            => $this->whenLoaded('rejector', fn () => [
-                'id'   => $this->rejector->id,
-                'name' => $this->rejector->name,
             ]),
 
             'created_at'          => $this->created_at?->toDateTimeString(),
