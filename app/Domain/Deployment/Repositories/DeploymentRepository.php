@@ -11,11 +11,12 @@ class DeploymentRepository extends BaseRepository
 {
     protected string $model = ApplicantBatch::class;
 
+    /**
+     * ⚡ OPTIMIZED: Only eager-load the lightweight applicant fields needed for the table.
+     * Full relations (batch, processedBy, cancelledBy) are skipped here and only loaded on GET /{id}.
+     */
     protected array $relations = [
-        'applicant',
-        'batch',
-        'processedBy',
-        'cancelledBy',
+        'applicant:id,applicant_code,first_name,middle_name,last_name,email',
     ];
 
     protected array $searchable = [
