@@ -218,6 +218,11 @@ class ApplicantDocumentController extends Controller
      * GET /applicant-documents/{applicantDocument}/file
      * GET /applicant-documents/{applicantDocument}/preview
      */
+        /**
+     * Stream file inline (Supports local, public, r2, and s3)
+     * GET /api/v1/applicant-documents/{applicantDocument}/preview
+     * GET /api/v1/applicant-documents/{applicantDocument}/file
+     */
     public function preview(ApplicantDocument $applicantDocument)
     {
         [$diskInstance, $diskName] = $this->resolveDiskInfo($applicantDocument);
@@ -227,10 +232,10 @@ class ApplicantDocumentController extends Controller
         }
 
         $path = $applicantDocument->file_path;
-        $mime = $applicantDocument->mime_type ?? 'application/octet-stream';
-        $filename = $applicantDocument->file_name ?? 'file';
+        $mime = $applicantDocument->mime_type ?? 'image/jpeg';
+        $filename = $applicantDocument->file_name ?? 'document';
 
-        // 🎯 FIX: Cloud storage (R2/S3) cannot use response()->file($disk->path()). Stream or redirect instead!
+        // 🎯 Stream directly from Cloud Storage (R2 / S3) or Local
         if (in_array($diskName, ['r2', 's3'])) {
             try {
                 if ($diskInstance->providesTemporaryUrls()) {
@@ -239,27 +244,32 @@ class ApplicantDocumentController extends Controller
             } catch (\Throwable $e) {}
 
             return response()->stream(
-                fn () => echoStream($diskInstance->readStream($path)),
+                function () use ($diskInstance, $path) {
+                    $stream = $diskInstance->readStream($path);
+                    if ($stream) {
+                        fpassthru($stream);
+                        if (is_resource($stream)) fclose($stream);
+                    }
+                },
                 200,
                 [
                     'Content-Type'        => $mime,
                     'Content-Disposition' => 'inline; filename="' . addslashes($filename) . '"',
+                    'Cache-Control'       => 'public, max-age=86400',
                 ]
             );
         }
 
-        // Local or public filesystem
         return response()->file(
             $diskInstance->path($path),
             [
                 'Content-Type'        => $mime,
                 'Content-Disposition' => 'inline; filename="' . addslashes($filename) . '"',
-                'Cache-Control'       => 'private, max-age=86400',
-            ],
+                'Cache-Control'       => 'public, max-age=86400',
+            ]
         );
     }
 
-    /** Alias for preview */
     public function file(ApplicantDocument $applicantDocument)
     {
         return $this->preview($applicantDocument);

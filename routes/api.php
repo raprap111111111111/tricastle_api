@@ -1,5 +1,7 @@
 <?php
+// routes/api.php
 
+use App\Http\Controllers\v1\ApplicantDocumentController;
 use App\Http\Controllers\v1\AuthController;
 use App\Http\Controllers\v1\HealthController;
 use Illuminate\Support\Facades\Route;
@@ -7,11 +9,23 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->group(function () {
 
     // ============================================
-    // 🔓 PUBLIC ROUTES
+    // 🔓 PUBLIC ROUTES (No Auth Required)
     // ============================================
 
     // 🟢 KEEP-ALIVE HEALTH ENDPOINT
     Route::get('/health', HealthController::class)->name('health');
+
+    // 🟢 PUBLIC DOCUMENT STREAMING (Allows <img src="..."> & AIS PDF generator to stream photos)
+    Route::prefix('applicant-documents')->group(function () {
+        Route::get('/{applicantDocument}/preview', [ApplicantDocumentController::class, 'preview'])
+            ->whereNumber('applicantDocument');
+
+        Route::get('/{applicantDocument}/file', [ApplicantDocumentController::class, 'file'])
+            ->whereNumber('applicantDocument');
+
+        Route::get('/{applicantDocument}/download', [ApplicantDocumentController::class, 'download'])
+            ->whereNumber('applicantDocument');
+    });
 
     Route::prefix('auth')->group(function () {
         Route::post('/login', [AuthController::class, 'login'])->name('auth.login');
@@ -19,7 +33,7 @@ Route::prefix('v1')->group(function () {
     });
 
     // ============================================
-    // 🔒 PROTECTED ROUTES
+    // 🔒 PROTECTED ROUTES (Auth Required)
     // ============================================
     Route::middleware('auth:api')->group(function () {
 
