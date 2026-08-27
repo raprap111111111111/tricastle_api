@@ -212,12 +212,6 @@ class ApplicantDocumentController extends Controller
             'Document status updated successfully'
         );
     }
-
-    /**
-     * Stream file inline (Supports local, public, r2, and s3)
-     * GET /applicant-documents/{applicantDocument}/file
-     * GET /applicant-documents/{applicantDocument}/preview
-     */
     /**
      * Stream file inline (Supports local, public, r2, and s3)
      * GET /api/v1/applicant-documents/{applicantDocument}/preview
@@ -231,44 +225,56 @@ class ApplicantDocumentController extends Controller
             abort(404, 'File not found on storage server.');
         }
 
-        $path = $applicantDocument->file_path;
-        $mime = $applicantDocument->mime_type ?? 'image/jpeg';
+        $path     = $applicantDocument->file_path;
+        $mime     = $applicantDocument->mime_type ?? 'image/jpeg';
         $filename = $applicantDocument->file_name ?? 'document';
 
-        // 🎯 Stream directly from Cloud Storage (R2 / S3) or Local
+        // Common headers (including CORS so <img> from Vercel works)
+        $headers = [
+            'Content-Type'                => $mime,
+            'Content-Disposition'         => 'inline; filename="' . addslashes($filename) . '"',
+            'Cache-Control'               => 'public, max-age=86400',
+            'Access-Control-Allow-Origin' => '*',
+            'Access-Control-Allow-Methods' => 'GET, OPTIONS',
+            'Access-Control-Allow-Headers' => 'Content-Type, Authorization',
+        ];
+
+        // ── Cloud storage (R2 / S3) ──────────────────────────────────────────
         if (in_array($diskName, ['r2', 's3'])) {
             try {
-                if ($diskInstance->providesTemporaryUrls()) {
-                    return redirect()->away($diskInstance->temporaryUrl($path, now()->addMinutes(30)));
+                // Prefer temporary signed URL when available (fastest + works everywhere)
+                if (method_exists($diskInstance, 'temporaryUrl') && $diskInstance->providesTemporaryUrls()) {
+                    $tempUrl = $diskInstance->temporaryUrl($path, now()->addMinutes(60));
+                    return redirect()->away($tempUrl);
                 }
             } catch (\Throwable $e) {
+                // fall through to stream
             }
 
+            // Fallback: stream the file ourselves
             return response()->stream(
                 function () use ($diskInstance, $path) {
                     $stream = $diskInstance->readStream($path);
                     if ($stream) {
                         fpassthru($stream);
-                        if (is_resource($stream)) fclose($stream);
+                        if (is_resource($stream)) {
+                            fclose($stream);
+                        }
                     }
                 },
                 200,
-                [
-                    'Content-Type'        => $mime,
-                    'Content-Disposition' => 'inline; filename="' . addslashes($filename) . '"',
-                    'Cache-Control'       => 'public, max-age=86400',
-                ]
+                $headers
             );
         }
 
-        return response()->file(
-            $diskInstance->path($path),
-            [
-                'Content-Type'        => $mime,
-                'Content-Disposition' => 'inline; filename="' . addslashes($filename) . '"',
-                'Cache-Control'       => 'public, max-age=86400',
-            ]
-        );
+        // ── Local / public disk ──────────────────────────────────────────────
+        $fullPath = $diskInstance->path($path);
+
+        if (!file_exists($fullPath)) {
+            abort(404, 'File not found on local disk.');
+        }
+
+        return response()->file($fullPath, $headers);
     }
 
     public function file(ApplicantDocument $applicantDocument)
