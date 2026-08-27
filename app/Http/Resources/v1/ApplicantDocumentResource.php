@@ -16,24 +16,35 @@ class ApplicantDocumentResource extends JsonResource
 
         $fileUrl = null;
 
-        // 1. If stored on Cloud Storage (R2 / S3), generate temporary signed URL
-        if ($path && in_array($diskName, ['r2', 's3'])) {
+        if ($path) {
             try {
                 /** @var FilesystemAdapter $disk */
                 $disk = Storage::disk($diskName);
-                if (method_exists($disk, 'temporaryUrl')) {
+
+                if (in_array($diskName, ['r2', 's3']) && method_exists($disk, 'temporaryUrl')) {
                     $fileUrl = $disk->temporaryUrl($path, now()->addHours(4));
+                } else {
+                    $fileUrl = $disk->url($path);
                 }
-            } catch (\Throwable $e) {}
+            } catch (\Throwable $e) {
+            }
         }
 
-        // 2. 🎯 DEFAULT SAFE URL: Stream through API (Bypasses 404 /storage/ issues!)
-        if (!$fileUrl && $this->id) {
-            $fileUrl = url("/api/v1/applicant-documents/{$this->id}/preview");
+        // 🎯 BULLETPROOF FIX: If URL is null OR points to /storage/ (which causes 404s on Render), OVERRIDE IT.
+        if (!$fileUrl || !str_starts_with($fileUrl, 'http') || str_contains($fileUrl, '/storage/')) {
+            if ($this->id) {
+                // Force it through our secure PHP streaming endpoint
+                $fileUrl = url("/api/v1/applicant-documents/{$this->id}/preview");
+            }
         }
 
-        // 3. Force HTTPS scheme on production
-        if ($fileUrl && str_starts_with($fileUrl, 'http://') && !str_contains($fileUrl, 'localhost') && !str_contains($fileUrl, '127.0.0.1')) {
+        // Only force HTTPS outside of local development
+        if (
+            $fileUrl &&
+            str_starts_with($fileUrl, 'http://') &&
+            !str_contains($fileUrl, 'localhost') &&
+            !str_contains($fileUrl, '127.0.0.1')
+        ) {
             $fileUrl = str_replace('http://', 'https://', $fileUrl);
         }
 
@@ -48,7 +59,7 @@ class ApplicantDocumentResource extends JsonResource
             'file_size'           => $this->file_size ?? $this->fileRepository?->file_size,
             'mime_type'           => $this->mime_type ?? $this->fileRepository?->mime_type,
 
-            // 🎯 GUARANTEED WORKING HTTPS STREAMING URL
+            // 🎯 NOW GUARANTEED TO BE /PREVIEW IF CLOUD URL FAILS
             'file_url'            => $fileUrl,
             'url'                 => $fileUrl,
             'public_url'          => $fileUrl,

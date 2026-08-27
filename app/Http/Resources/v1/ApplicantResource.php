@@ -9,30 +9,53 @@ class ApplicantResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        // Safe relation check to prevent N+1 queries during list fetching
         $family = $this->relationLoaded('family') ? $this->family : null;
 
-        // Extract 2x2 Photo URL automatically if currentDocuments is loaded
-        $photoUrl = $this->when($this->relationLoaded('currentDocuments'), function () {
-            $doc = $this->currentDocuments->first(function ($d) {
-                $code = strtoupper((string) ($d->documentType?->code ?? ''));
-                $name = strtoupper((string) ($d->documentType?->name ?? ''));
-                return str_contains($code, 'PHOTO') 
-                    || str_contains($code, '2X2') 
-                    || str_contains($name, 'PHOTO') 
-                    || str_contains($name, '2X2');
-            });
+        // 🎯 Find ID Photo document
+        $docs = $this->relationLoaded('currentDocuments')
+            ? $this->currentDocuments
+            : ($this->relationLoaded('documents') ? $this->documents : collect());
 
-            return $doc ? (new ApplicantDocumentResource($doc))->toArray(request())['file_url'] ?? null : null;
+        $photoDoc = $docs->first(function ($d) {
+            $code = strtoupper((string) ($d->documentType?->code ?? $d->code ?? ''));
+            $name = strtoupper((string) ($d->documentType?->name ?? $d->name ?? ''));
+            return str_contains($code, 'PHOTO') || str_contains($code, '2X2') || str_contains($name, 'PHOTO') || str_contains($name, '2X2');
         });
+
+        // 🎯 Force the URL to the secure /preview endpoint
+        $streamPhotoUrl = $photoDoc ? url("/api/v1/applicant-documents/{$photoDoc->id}/preview") : null;
+
+        // Only force HTTPS outside of local development
+        if (
+            $streamPhotoUrl &&
+            str_starts_with($streamPhotoUrl, 'http://') &&
+            !str_contains($streamPhotoUrl, 'localhost') &&
+            !str_contains($streamPhotoUrl, '127.0.0.1')
+        ) {
+            $streamPhotoUrl = str_replace('http://', 'https://', $streamPhotoUrl);
+        }
+
+        // Clean up legacy flat URLs...
+        $legacyPhotoUrl = $this->photo_url ?? $this->profile_photo_url ?? null;
+        if ($legacyPhotoUrl) {
+            if (str_contains($legacyPhotoUrl, '/storage/')) {
+                $legacyPhotoUrl = null;
+            } elseif (
+                str_starts_with($legacyPhotoUrl, 'http://') &&
+                !str_contains($legacyPhotoUrl, 'localhost') &&
+                !str_contains($legacyPhotoUrl, '127.0.0.1')
+            ) {
+                $legacyPhotoUrl = str_replace('http://', 'https://', $legacyPhotoUrl);
+            }
+        }
 
         return [
             'id'             => $this->id,
             'applicant_code' => $this->applicant_code,
 
-            // 🎯 Top-level photo accessor for table avatar & AIS PDF
-            'photo_url'      => $this->photo_url ?? $this->avatar_url ?? $photoUrl,
-            'profile_photo_url' => $this->photo_url ?? $this->avatar_url ?? $photoUrl,
+            // 🎯 GUARANTEED WORKING URL (Prefers /preview stream over anything else)
+            'photo_url'         => $streamPhotoUrl ?? $legacyPhotoUrl,
+            'profile_photo_url' => $streamPhotoUrl ?? $legacyPhotoUrl,
 
             // ─── AIS / Trade Test ─────────────────────────────────────────
             'applied_position'        => $this->applied_position,
@@ -110,17 +133,13 @@ class ApplicantResource extends JsonResource
             ],
 
             'salary' => [
-                'expected_salary' => $this->expected_salary !== null
-                    ? (float) $this->expected_salary
-                    : null,
+                'expected_salary' => $this->expected_salary !== null ? (float) $this->expected_salary : null,
                 'expected_salary_currency' => $this->expected_salary_currency,
-                'current_salary' => $this->current_salary !== null
-                    ? (float) $this->current_salary
-                    : null,
+                'current_salary' => $this->current_salary !== null ? (float) $this->current_salary : null,
                 'current_salary_currency' => $this->current_salary_currency,
             ],
 
-            // ─── Family Details (Includes AIS Background Sentences) ───────
+            // ─── Family Details ───────────────────────────────────────────
             'family' => [
                 'father' => [
                     'name'       => $family?->father_name ?? $this->father_name,
@@ -154,23 +173,23 @@ class ApplicantResource extends JsonResource
             // ─── Japan Contacts ───────────────────────────────────────────
             'japan_contacts' => $this->whenLoaded(
                 'japanContacts',
-                fn () => ApplicantJapanContactResource::collection($this->japanContacts)
+                fn() => ApplicantJapanContactResource::collection($this->japanContacts)
             ),
 
             // ─── Staff Relations ──────────────────────────────────────────
-            'assigned_staff' => $this->whenLoaded('assignedStaff', fn () => [
+            'assigned_staff' => $this->whenLoaded('assignedStaff', fn() => [
                 'id'        => $this->assignedStaff->id,
                 'full_name' => $this->assignedStaff->full_name ?? $this->assignedStaff->name,
                 'name'      => $this->assignedStaff->full_name ?? $this->assignedStaff->name,
             ]),
 
-            'reviewer' => $this->whenLoaded('reviewer', fn () => [
+            'reviewer' => $this->whenLoaded('reviewer', fn() => [
                 'id'        => $this->reviewer->id,
                 'full_name' => $this->reviewer->full_name ?? $this->reviewer->name,
                 'name'      => $this->reviewer->full_name ?? $this->reviewer->name,
             ]),
 
-            'creator' => $this->whenLoaded('creator', fn () => [
+            'creator' => $this->whenLoaded('creator', fn() => [
                 'id'        => $this->creator->id,
                 'full_name' => $this->creator->full_name ?? $this->creator->name,
                 'name'      => $this->creator->full_name ?? $this->creator->name,
@@ -179,60 +198,46 @@ class ApplicantResource extends JsonResource
             // ─── Sub-models ───────────────────────────────────────────────
             'lifestyle' => $this->whenLoaded(
                 'lifestyle',
-                fn () => $this->lifestyle
-                    ? new ApplicantLifestyleResource($this->lifestyle)
-                    : null
+                fn() => $this->lifestyle ? new ApplicantLifestyleResource($this->lifestyle) : null
             ),
 
             'educations' => $this->whenLoaded(
                 'educations',
-                fn () => ApplicantEducationResource::collection($this->educations)
+                fn() => ApplicantEducationResource::collection($this->educations)
             ),
 
             'employments' => $this->whenLoaded(
                 'employments',
-                fn () => ApplicantEmploymentResource::collection($this->employments)
+                fn() => ApplicantEmploymentResource::collection($this->employments)
             ),
 
             'tattoos' => $this->whenLoaded(
                 'tattoos',
-                fn () => ApplicantTattooResource::collection($this->tattoos)
+                fn() => ApplicantTattooResource::collection($this->tattoos)
             ),
 
             // ─── Documents / Biodata ──────────────────────────────────────
             'documents' => $this->whenLoaded(
                 'currentDocuments',
-                fn () => ApplicantDocumentResource::collection($this->currentDocuments)
+                fn() => ApplicantDocumentResource::collection($this->currentDocuments)
             ),
 
             'biodata' => $this->whenLoaded('currentDocuments', function () {
                 $doc = $this->currentDocuments->first(
-                    fn ($d) => strtoupper((string) ($d->documentType?->code ?? '')) === 'BIODATA'
+                    fn($d) => strtoupper((string) ($d->documentType?->code ?? '')) === 'BIODATA'
                 );
-
                 return $doc ? new ApplicantDocumentResource($doc) : null;
             }),
 
             // ─── Applicant Batches ────────────────────────────────────────
             'applicant_batches' => $this->whenLoaded(
                 'applicantBatches',
-                fn () => $this->applicantBatches->map(fn ($ab) => [
+                fn() => $this->applicantBatches->map(fn($ab) => [
                     'id'               => $ab->id,
                     'applicant_id'     => $ab->applicant_id,
                     'batch_id'         => $ab->batch_id,
                     'status'           => $ab->status,
                     'assigned_at'      => $ab->assigned_at?->toIso8601String(),
-                    'interview_date'   => $ab->interview_date?->format('Y-m-d'),
-                    'medical_date'     => $ab->medical_date?->format('Y-m-d'),
-                    'exam_date'        => $ab->exam_date?->format('Y-m-d'),
-                    'accepted_at'      => $ab->accepted_at?->toIso8601String(),
-                    'deployed_at'      => $ab->deployed_at?->toIso8601String(),
-                    'exam_score'       => $ab->exam_score !== null ? (float) $ab->exam_score : null,
-                    'interview_notes'  => $ab->interview_notes,
-                    'medical_notes'    => $ab->medical_notes,
-                    'rejection_reason' => $ab->rejection_reason,
-                    'remarks'          => $ab->remarks,
-
                     'batch' => $ab->relationLoaded('batch') && $ab->batch ? [
                         'id'           => $ab->batch->id,
                         'batch_number' => $ab->batch->batch_number ?? null,
@@ -241,46 +246,9 @@ class ApplicantResource extends JsonResource
                         'status'       => $ab->batch->status,
                         'is_active'    => (bool) $ab->batch->is_active,
                     ] : null,
-
-                    'processed_by' => $ab->relationLoaded('processedBy') && $ab->processedBy ? [
-                        'id'        => $ab->processedBy->id,
-                        'full_name' => $ab->processedBy->full_name ?? $ab->processedBy->name,
-                    ] : null,
-
-                    'deployment_country'       => $ab->deployment_country,
-                    'deployment_company'       => $ab->deployment_company,
-                    'deployment_position'      => $ab->deployment_position,
-                    'contract_duration_months' => $ab->contract_duration_months,
-                    'contract_start_date'      => $ab->contract_start_date?->format('Y-m-d'),
-                    'contract_end_date'        => $ab->contract_end_date?->format('Y-m-d'),
-                    'monthly_salary'           => $ab->monthly_salary !== null ? (float) $ab->monthly_salary : null,
-                    'salary_currency'          => $ab->salary_currency,
-                    'flight_date'              => $ab->flight_date?->format('Y-m-d'),
-                    'visa_type'                => $ab->visa_type,
-                    'deployment_notes'         => $ab->deployment_notes,
-                    'cancellation_reason'      => $ab->cancellation_reason,
-                    'cancelled_at'             => $ab->cancelled_at?->toIso8601String(),
                 ])
             ),
 
-            // ─── Legacy batches pivot ─────────────────────────────────────
-            'batches' => $this->whenLoaded(
-                'batches',
-                fn () => $this->batches->map(fn ($batch) => [
-                    'id'           => $batch->id,
-                    'batch_code'   => $batch->batch_code ?? null,
-                    'name'         => $batch->name,
-                    'company_name' => $batch->company?->name,
-                    'pivot'        => [
-                        'status'         => $batch->pivot->status,
-                        'assigned_at'    => $batch->pivot->assigned_at,
-                        'interview_date' => $batch->pivot->interview_date,
-                        'deployed_at'    => $batch->pivot->deployed_at,
-                    ],
-                ])
-            ),
-
-            // ─── Timestamps ───────────────────────────────────────────────
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];
