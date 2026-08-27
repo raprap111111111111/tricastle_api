@@ -122,16 +122,11 @@ class Applicant extends Model
         'created_by',
     ];
 
-    // ✅ UPDATE 1: Added currentDocuments.documentType to avoid N+1 query performance issues
-    protected $with = [
-        'assignedStaff',
-        'creator',
-        'lifestyle',
-        'educations',
-        'employments',
-        'tattoos',
-        'currentDocuments.documentType' 
-    ];
+    /**
+     * ⚡ OPTIMIZED: Removed automatic loading of deep profile relations (Lifestyle, Tattoos, Educations, Employments).
+     * This makes list queries and pagination extremely fast.
+     */
+    protected $with = [];
 
     protected $casts = [
         // ── Dates ─────────────────────────────────────────────────────────
@@ -163,7 +158,6 @@ class Applicant extends Model
         'status' => ApplicantStatus::class,
     ];
 
-    // ✅ UPDATE 2: Added 'photo_url' to the appends array
     protected $appends = ['full_name', 'age', 'photo_url'];
 
     // ═══════════════════════════════════════════════════════
@@ -302,7 +296,6 @@ class Applicant extends Model
         );
     }
 
-    // ✅ UPDATE 3: Added the photoUrl accessor logic
     protected function photoUrl(): Attribute
     {
         return Attribute::make(

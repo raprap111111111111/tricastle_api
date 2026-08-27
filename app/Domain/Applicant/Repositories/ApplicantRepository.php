@@ -10,9 +10,16 @@ class ApplicantRepository extends BaseRepository
 {
     protected string $model = Applicant::class;
 
-    // ⚡ Lightweight relations for list view query speed
+    /**
+     * ⚡ OPTIMIZED: Highly specific relational scopes for lists.
+     * Selects only required batch columns and only columns necessary to stream the profile photo.
+     * Bypasses heavy document fields such as extracted_data / validated_data.
+     */
     protected array $relations = [
-        'applicantBatches.batch:id,batch_number,name,country',
+        'assignedStaff:id,name,full_name',
+        'applicantBatches.batch:id,batch_number,name,country,is_active',
+        'currentDocuments:id,applicant_id,document_type_id,file_path,file_name,status',
+        'currentDocuments.documentType:id,code,name',
     ];
 
     protected array $searchable = [

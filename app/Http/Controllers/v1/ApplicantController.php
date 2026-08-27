@@ -45,7 +45,7 @@ class ApplicantController extends Controller
     {
         $result = $this->listAction->execute(
             $request->validated(),
-            ApplicantResource::class
+            ApplicantResource::class  
         );
 
         return $this->responseSuccess($result, 'Applicants retrieved successfully');
@@ -61,13 +61,15 @@ class ApplicantController extends Controller
             'educations',
             'employments',
             'tattoos',
+            'family',
+            'japanContacts',
             'applicantBatches.batch',
             'applicantBatches.processedBy',
             'currentDocuments.documentType',
         ]);
 
         return $this->responseSuccess(
-            new ApplicantResource($applicant),
+            new ApplicantResource($applicant),  // ← full resource unchanged
             'Applicant retrieved successfully'
         );
     }
