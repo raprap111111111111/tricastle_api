@@ -31,6 +31,7 @@ use App\Http\Resources\v1\ApplicantDocumentResource;
 use App\Models\ApplicantDocument;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -93,6 +94,19 @@ class ApplicantDocumentController extends Controller
         return $this->responseSuccess($result, 'Documents retrieved successfully');
     }
 
+    /**
+     * Get expiring documents.
+     * GET /api/v1/applicant-documents/expiring
+     */
+    public function expiring(GetExpiringDocumentsRequest $request): JsonResponse
+    {
+        $result = $this->getExpiringDocumentsAction->execute(
+            $request->validated()
+        );
+
+        return $this->responseSuccess($result, 'Expiring documents retrieved successfully');
+    }
+
     public function show(
         GetApplicantDocumentRequest $request,
         ApplicantDocument           $applicantDocument
@@ -131,7 +145,7 @@ class ApplicantDocumentController extends Controller
             priority: $request->input('priority',      $applicantDocument->priority ?? 'normal'),
             notes: $request->input('notes',         $applicantDocument->notes),
             metadata: $applicantDocument->metadata,
-            uploadedBy: auth()->id(),
+            uploadedBy: Auth::id() ?? (int) $request->user()?->getAuthIdentifier(),
         );
 
         $newVersion = $this->uploadAction->execute($dto);
@@ -201,10 +215,12 @@ class ApplicantDocumentController extends Controller
         UpdateApplicantDocumentStatusRequest $request,
         ApplicantDocument $applicantDocument
     ): JsonResponse {
+        $userId = Auth::id() ?? (int) $request->user()?->getAuthIdentifier();
+
         $updated = $this->updateStatusAction->execute(
             $applicantDocument,
             $request->validated(),
-            $request->user()->id,
+            $userId,
         );
 
         return $this->responseSuccess(
@@ -212,6 +228,7 @@ class ApplicantDocumentController extends Controller
             'Document status updated successfully'
         );
     }
+
     /**
      * Stream file inline (Supports local, public, r2, and s3)
      * GET /api/v1/applicant-documents/{applicantDocument}/preview
@@ -299,10 +316,6 @@ class ApplicantDocumentController extends Controller
 
     /**
      * ✅ REUSABLE DISK RESOLVER
-     * Priority:
-     * 1) Disk saved on document / file_repository
-     * 2) Default disk from .env (FILESYSTEM_DISK)
-     * 3) Fallback candidates
      */
     private function resolveDiskInfo(ApplicantDocument $doc): array
     {
@@ -348,9 +361,12 @@ class ApplicantDocumentController extends Controller
         return [null, null, null];
     }
 
-    function echoStream($stream)
+    private function echoStream(mixed $stream): void
     {
-        if (!$stream) return;
+        if (!$stream || !is_resource($stream)) {
+            return;
+        }
+        
         while (!feof($stream)) {
             echo fread($stream, 1024 * 8);
             flush();

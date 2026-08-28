@@ -137,6 +137,14 @@ class RolesSeeder extends Seeder
             'notification.send',
             'notification-template.manage',
 
+               // Document Expiry Alerts
+            'document-expiry-alert.viewAny',
+            'document-expiry-alert.view',
+            'document-expiry-alert.create',
+            'document-expiry-alert.delete',
+            'document-expiry-alert.dismiss',
+
+
             // Special
             'document.lock',
             'document.unlock',
@@ -165,6 +173,14 @@ class RolesSeeder extends Seeder
             'applicant.updateOwn',
             'applicant.assign',
             'applicant.transfer',
+
+               // Document Expiry Alerts
+            'document-expiry-alert.viewAny',
+            'document-expiry-alert.view',
+            'document-expiry-alert.create',
+            'document-expiry-alert.delete',
+            'document-expiry-alert.dismiss',
+
 
             // Documents
             'document.viewAny',
