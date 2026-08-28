@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Support\Facades\Storage;
 
 class User extends Authenticatable
 {
@@ -73,20 +74,19 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
-            'email_verified_at'     => 'datetime',
-            'password'              => 'hashed',
-            'is_active'             => 'boolean',
-            'two_factor_enabled'    => 'boolean',
-            'date_of_birth'         => 'date',
-            'hired_date'            => 'date',
-            'last_login_at'         => 'datetime',
-            'password_changed_at'   => 'datetime',
-            'locked_until'          => 'datetime',
-            'preferences'           => 'array',
-            'metadata'              => 'array',
+            'email_verified_at'         => 'datetime',
+            'password'                  => 'hashed',
+            'is_active'                 => 'boolean',
+            'two_factor_enabled'        => 'boolean',
+            'date_of_birth'             => 'date',
+            'hired_date'                => 'date',
+            'last_login_at'             => 'datetime',
+            'password_changed_at'       => 'datetime',
+            'locked_until'              => 'datetime',
+            'preferences'               => 'array',
+            'metadata'                  => 'array',
             'two_factor_recovery_codes' => 'array',
-            'effects_enabled' => 'boolean',
-
+            'effects_enabled'           => 'boolean',
         ];
     }
 
@@ -144,7 +144,30 @@ class User extends Authenticatable
     protected function initials(): Attribute
     {
         return Attribute::make(
-            get: fn() => strtoupper(substr($this->first_name, 0, 1) . substr($this->last_name, 0, 1))
+            get: fn() => strtoupper(substr($this->first_name ?? '', 0, 1) . substr($this->last_name ?? '', 0, 1))
+        );
+    }
+
+    /**
+     * Dynamically format avatar URL for R2 / Storage
+     */
+    protected function avatar(): Attribute
+    {
+        return Attribute::make(
+            get: function ($value) {
+                if (empty($value)) {
+                    return null;
+                }
+
+                // If stored as a full URL, return directly
+                if (str_starts_with($value, 'http://') || str_starts_with($value, 'https://')) {
+                    return $value;
+                }
+
+                // Otherwise, construct full URL using R2 disk configuration
+                $baseUrl = config('filesystems.disks.r2.url', env('AWS_URL'));
+                return $baseUrl ? rtrim($baseUrl, '/') . '/' . ltrim($value, '/') : Storage::disk('r2')->url($value);
+            }
         );
     }
 
@@ -169,7 +192,7 @@ class User extends Authenticatable
         $this->update([
             'last_login_at' => now(),
             'last_login_ip' => $ip,
-            'login_count' => $this->login_count + 1
+            'login_count'   => $this->login_count + 1
         ]);
     }
 }

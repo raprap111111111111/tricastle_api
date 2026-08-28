@@ -50,12 +50,12 @@ return [
 
         'r2' => [
             'driver'                  => 's3',
-            'key'                     => env('CLOUDFLARE_R2_ACCESS_KEY_ID', env('AWS_ACCESS_KEY_ID', null)),
-            'secret'                  => env('CLOUDFLARE_R2_SECRET_ACCESS_KEY', env('AWS_SECRET_ACCESS_KEY', null)),
+            'key'                     => env('CLOUDFLARE_R2_ACCESS_KEY_ID', env('AWS_ACCESS_KEY_ID', '')),
+            'secret'                  => env('CLOUDFLARE_R2_SECRET_ACCESS_KEY', env('AWS_SECRET_ACCESS_KEY', '')),
             'region'                  => 'auto',
-            'bucket'                  => env('CLOUDFLARE_R2_BUCKET', env('AWS_BUCKET', null)),
-            'url'                     => env('CLOUDFLARE_R2_URL', env('AWS_URL', null)),
-            'endpoint'                => env('CLOUDFLARE_R2_ENDPOINT', env('AWS_ENDPOINT', null)),
+            'bucket'                  => env('CLOUDFLARE_R2_BUCKET', env('AWS_BUCKET', 'tricastle-files')),
+            'url'                     => env('CLOUDFLARE_R2_URL', env('AWS_URL', '')),
+            'endpoint'                => env('CLOUDFLARE_R2_ENDPOINT', env('AWS_ENDPOINT', '')),
             'use_path_style_endpoint' => true,
             'throw'                   => false,
             'report'                  => false,
