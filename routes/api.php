@@ -15,7 +15,7 @@ Route::prefix('v1')->group(function () {
     // 🟢 KEEP-ALIVE HEALTH ENDPOINT
     Route::get('/health', HealthController::class)->name('health');
 
-    // 🟢 PUBLIC DOCUMENT STREAMING (Allows <img src="..."> & AIS PDF generator to stream photos)
+    // 🟢 PUBLIC DOCUMENT STREAMING
     Route::prefix('applicant-documents')->group(function () {
         Route::get('/{applicantDocument}/preview', [ApplicantDocumentController::class, 'preview'])
             ->whereNumber('applicantDocument');
@@ -40,6 +40,7 @@ Route::prefix('v1')->group(function () {
         // Auth routes
         Route::prefix('auth')->group(function () {
             Route::get('/profile', [AuthController::class, 'profile'])->name('auth.profile');
+            Route::match(['post', 'put'], '/profile', [AuthController::class, 'updateProfile'])->name('auth.update-profile');
             Route::post('/logout', [AuthController::class, 'logout'])->name('auth.logout');
             Route::put('/change-password', [AuthController::class, 'changePassword'])->name('auth.change-password');
             Route::put('/preferences', [AuthController::class, 'updatePreferences'])->name('auth.preferences');

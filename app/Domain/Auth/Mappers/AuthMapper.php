@@ -8,6 +8,8 @@ use App\Domain\Auth\DTOs\RegisterDTO;
 use App\Http\Requests\v1\Auth\ChangePasswordRequest;
 use App\Http\Requests\v1\Auth\LoginRequest;
 use App\Http\Requests\v1\Auth\RegisterRequest;
+use App\Domain\Auth\DTOs\UpdateProfileDTO;
+use App\Http\Requests\v1\Auth\UpdateProfileRequest;
 
 class AuthMapper
 {
@@ -40,6 +42,30 @@ class AuthMapper
         return new ChangePasswordDTO(
             currentPassword: $request->validated('current_password'),
             newPassword: $request->validated('new_password'),
+        );
+    }
+    
+    public static function fromUpdateProfileRequest(UpdateProfileRequest $request): UpdateProfileDTO
+    {
+        return new UpdateProfileDTO(
+            firstName: $request->input('first_name'),
+            middleName: $request->input('middle_name'),
+            lastName: $request->input('last_name'),
+            suffix: $request->input('suffix'),
+            email: $request->input('email'),
+            phone: $request->input('phone'),
+            mobile: $request->input('mobile'),
+            dateOfBirth: $request->input('date_of_birth'),
+            gender: $request->input('gender'),
+            department: $request->input('department'),
+            position: $request->input('position'),
+            address: $request->input('address'),
+            city: $request->input('city'),
+            province: $request->input('province'),
+            country: $request->input('country'),
+            postalCode: $request->input('postal_code'),
+            bio: $request->input('bio'),
+            avatar: $request->file('avatar'),
         );
     }
 }

@@ -15,11 +15,14 @@ use App\Http\Resources\v1\AuthResource;
 use App\Http\Resources\v1\UserResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Domain\Auth\Actions\UpdateProfileAction;
+use App\Http\Requests\v1\Auth\UpdateProfileRequest;
 
 class AuthController extends Controller
 {
     public function __construct(
         private readonly LoginAction $loginAction,
+        private readonly UpdateProfileAction $updateProfileAction,
         private readonly RegisterAction $registerAction,
         private readonly LogoutAction $logoutAction,
         private readonly ChangePasswordAction $changePasswordAction,
@@ -124,6 +127,19 @@ class AuthController extends Controller
         return $this->responseSuccess(
             null,
             'Password changed successfully. Please login again.'
+        );
+    }
+
+    public function updateProfile(UpdateProfileRequest $request): JsonResponse
+    {
+        $user = $this->updateProfileAction->execute(
+            $request->user(),
+            AuthMapper::fromUpdateProfileRequest($request)
+        );
+
+        return $this->responseSuccess(
+            new UserResource($user),
+            'Profile updated successfully'
         );
     }
 }
