@@ -10,19 +10,6 @@ class UserResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        // Safely format avatar URL for Local, S3, or Cloudflare R2
-        $avatarUrl = null;
-        if ($this->avatar) {
-            // Normalize Windows backslashes (avatars\file.jpg -> avatars/file.jpg)
-            $path = str_replace('\\', '/', $this->avatar);
-
-            if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
-                $avatarUrl = $path;
-            } else {
-                $avatarUrl = Storage::url($path);
-            }
-        }
-
         return [
             'id'                  => $this->id,
             'first_name'          => $this->first_name,
@@ -34,7 +21,7 @@ class UserResource extends JsonResource
             'email_verified_at'   => $this->email_verified_at,
             'phone'               => $this->phone,
             'mobile'              => $this->mobile,
-            'avatar'              => $avatarUrl,
+            'avatar'              => $this->resolveAvatarUrl(),
             'bio'                 => $this->bio,
             'date_of_birth'       => $this->date_of_birth,
             'gender'              => $this->gender,
@@ -69,14 +56,65 @@ class UserResource extends JsonResource
             'effects_enabled'     => (bool) ($this->effects_enabled ?? true),
 
             // Roles & Permissions
-            'roles'               => $this->whenLoaded('roles', fn() => $this->roles->pluck('name')),
+            'roles'               => $this->whenLoaded('roles', fn () => $this->roles->pluck('name')),
             'permissions'         => $this->when(
-                $this->resource->relationLoaded('roles') || true,
-                fn() => $this->resource->getAllPermissions()->pluck('name')
+                $this->relationLoaded('roles'),
+                fn () => $this->resource->getAllPermissions()->pluck('name')
             ),
 
             'created_at'          => $this->created_at,
             'updated_at'          => $this->updated_at,
         ];
+    }
+
+    /**
+     * Environment-aware avatar URL resolver.
+     * Works for:
+     * - absolute URLs (OAuth / already saved full links)
+     * - local/public disk
+     * - Cloudflare R2 / S3
+     */
+    private function resolveAvatarUrl(): ?string
+    {
+        // Use raw DB value to avoid depending on model accessor behavior
+        $raw = $this->resource->getRawOriginal('avatar') ?? null;
+
+        if (empty($raw)) {
+            return null;
+        }
+
+        // Normalize Windows paths
+        $path = str_replace('\\', '/', (string) $raw);
+
+        // Already absolute URL
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $this->forceHttpsIfNeeded($path);
+        }
+
+        // 🎯 Dynamic disk from .env (FILESYSTEM_DISK)
+        $disk = config('filesystems.default', 'public');
+
+        try {
+            $url = Storage::disk($disk)->url($path);
+        } catch (\Throwable $e) {
+            // Safe fallback
+            $url = url('storage/' . ltrim($path, '/'));
+        }
+
+        return $this->forceHttpsIfNeeded($url);
+    }
+
+    private function forceHttpsIfNeeded(?string $url): ?string
+    {
+        if (
+            $url
+            && str_starts_with($url, 'http://')
+            && !str_contains($url, 'localhost')
+            && !str_contains($url, '127.0.0.1')
+        ) {
+            return str_replace('http://', 'https://', $url);
+        }
+
+        return $url;
     }
 }

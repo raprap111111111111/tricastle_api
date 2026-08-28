@@ -219,28 +219,27 @@ class ApplicantDocumentController extends Controller
      */
     public function preview(ApplicantDocument $applicantDocument)
     {
-        [$diskInstance, $diskName] = $this->resolveDiskInfo($applicantDocument);
+        [$diskInstance, $diskName, $path] = $this->resolveDiskInfo($applicantDocument);
 
-        if (!$diskInstance) {
+        if (!$diskInstance || !$path) {
             abort(404, 'File not found on storage server.');
         }
 
-        $path     = $applicantDocument->file_path;
-        $mime     = $applicantDocument->mime_type ?? 'image/jpeg';
+        $mime     = $applicantDocument->mime_type ?? 'application/octet-stream';
         $filename = $applicantDocument->file_name ?? 'document';
 
         // Common headers (including CORS so <img> from Vercel works)
         $headers = [
-            'Content-Type'                => $mime,
-            'Content-Disposition'         => 'inline; filename="' . addslashes($filename) . '"',
-            'Cache-Control'               => 'public, max-age=86400',
-            'Access-Control-Allow-Origin' => '*',
+            'Content-Type'                 => $mime,
+            'Content-Disposition'          => 'inline; filename="' . addslashes($filename) . '"',
+            'Cache-Control'                => 'public, max-age=86400',
+            'Access-Control-Allow-Origin'  => '*',
             'Access-Control-Allow-Methods' => 'GET, OPTIONS',
             'Access-Control-Allow-Headers' => 'Content-Type, Authorization',
         ];
 
         // ── Cloud storage (R2 / S3) ──────────────────────────────────────────
-        if (in_array($diskName, ['r2', 's3'])) {
+        if (in_array($diskName, ['r2', 's3'], true)) {
             try {
                 // Prefer temporary signed URL when available (fastest + works everywhere)
                 if (method_exists($diskInstance, 'temporaryUrl') && $diskInstance->providesTemporaryUrls()) {
@@ -284,63 +283,78 @@ class ApplicantDocumentController extends Controller
 
     public function download(ApplicantDocument $applicantDocument): StreamedResponse
     {
-        [$diskInstance] = $this->resolveDiskInfo($applicantDocument);
+        [$diskInstance, $diskName, $path] = $this->resolveDiskInfo($applicantDocument);
 
-        if (!$diskInstance) {
+        if (!$diskInstance || !$path) {
             abort(404, 'File not found on server.');
         }
 
-        return $diskInstance->download(
-            $applicantDocument->file_path,
-            $applicantDocument->file_name,
-            [
-                'Content-Type' => $applicantDocument->mime_type ?? 'application/octet-stream',
-            ],
-        );
-    }
+        $filename = $applicantDocument->file_name ?? 'document';
+        $mime     = $applicantDocument->mime_type ?? 'application/octet-stream';
 
-    public function expiring(GetExpiringDocumentsRequest $request): JsonResponse
-    {
-        $result = $this->getExpiringDocumentsAction->execute($request->validated());
-
-        return $this->responseSuccess(
-            $result,
-            'Expiring documents retrieved successfully'
-        );
+        return $diskInstance->download($path, $filename, [
+            'Content-Type' => $mime,
+        ]);
     }
 
     /**
-     * 🎯 FIX: Resolves disk checking ['r2', 's3', 'public', 'local'] in proper priority order
+     * ✅ REUSABLE DISK RESOLVER
+     * Priority:
+     * 1) Disk saved on document / file_repository
+     * 2) Default disk from .env (FILESYSTEM_DISK)
+     * 3) Fallback candidates
      */
     private function resolveDiskInfo(ApplicantDocument $doc): array
     {
-        if (empty($doc->file_path)) {
-            return [null, null];
+        $path = $doc->file_path
+            ?? $doc->fileRepository?->file_path
+            ?? null;
+
+        if (empty($path)) {
+            return [null, null, null];
         }
 
-        $candidates = ['r2', 's3', 'public', 'local'];
+        // Preferred disk from DB records
+        $preferredDisk = $doc->disk
+            ?? $doc->fileRepository?->disk
+            ?? $doc->fileRepository?->storage_driver
+            ?? null;
+
+        // Default disk from environment (.env FILESYSTEM_DISK)
+        $defaultDisk = config('filesystems.default', 'public');
+
+        // Build unique candidate list
+        $candidates = array_values(array_unique(array_filter([
+            $preferredDisk,
+            $defaultDisk,
+            'r2',
+            's3',
+            'public',
+            'local',
+        ])));
 
         foreach ($candidates as $name) {
             try {
                 $disk = Storage::disk($name);
-                if ($disk->exists($doc->file_path)) {
-                    return [$disk, $name];
+
+                if ($disk->exists($path)) {
+                    return [$disk, $name, $path];
                 }
             } catch (\Throwable $e) {
                 continue;
             }
         }
 
-        return [null, null];
+        return [null, null, null];
     }
-}
 
-function echoStream($stream)
-{
-    if (!$stream) return;
-    while (!feof($stream)) {
-        echo fread($stream, 1024 * 8);
-        flush();
+    function echoStream($stream)
+    {
+        if (!$stream) return;
+        while (!feof($stream)) {
+            echo fread($stream, 1024 * 8);
+            flush();
+        }
+        fclose($stream);
     }
-    fclose($stream);
 }

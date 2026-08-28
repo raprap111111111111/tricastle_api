@@ -149,7 +149,7 @@ class User extends Authenticatable
     }
 
     /**
-     * Dynamically format avatar URL for R2 / Storage
+     * ✅ REUSABLE & ENVIRONMENT-AWARE AVATAR ACCESSOR
      */
     protected function avatar(): Attribute
     {
@@ -159,14 +159,16 @@ class User extends Authenticatable
                     return null;
                 }
 
-                // If stored as a full URL, return directly
+                // 1. If already an absolute URL (e.g. Google OAuth image), return as is
                 if (str_starts_with($value, 'http://') || str_starts_with($value, 'https://')) {
                     return $value;
                 }
 
-                // Otherwise, construct full URL using R2 disk configuration
-                $baseUrl = config('filesystems.disks.r2.url', env('AWS_URL'));
-                return $baseUrl ? rtrim($baseUrl, '/') . '/' . ltrim($value, '/') : Storage::disk('r2')->url($value);
+                // 2. Get default disk from .env ('public' locally, 'r2' in production)
+                $disk = config('filesystems.default', 'public');
+
+                // 3. Dynamically generate the URL based on active disk
+                return Storage::disk($disk)->url($value);
             }
         );
     }

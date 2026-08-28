@@ -37,12 +37,21 @@ class UpdateProfileAction
         $sf = $data->suffix ?? $user->suffix;
         $attributes['full_name'] = trim(implode(' ', array_filter([$fn, $mn, $ln, $sf])));
 
-        // Manage avatar file storage
+        // Manage avatar file storage dynamically (Local vs Production)
         if ($data->avatar) {
-            if ($user->avatar && !str_starts_with($user->avatar, 'http') && Storage::disk('public')->exists($user->avatar)) {
-                Storage::disk('public')->delete($user->avatar);
+            // Get the active disk configured in .env ('public' locally, 'r2' in production)
+            $disk = config('filesystems.default', 'public');
+
+            // Raw DB value (e.g. 'avatars/xyz.jpg')
+            $rawOldAvatar = $user->getRawOriginal('avatar');
+
+            // Delete old avatar if it exists on the active disk
+            if ($rawOldAvatar && !str_starts_with($rawOldAvatar, 'http') && Storage::disk($disk)->exists($rawOldAvatar)) {
+                Storage::disk($disk)->delete($rawOldAvatar);
             }
-            $attributes['avatar'] = $data->avatar->store('avatars', 'public');
+
+            // ✅ Store file on active disk
+            $attributes['avatar'] = $data->avatar->store('avatars', $disk);
         }
 
         $user->update($attributes);

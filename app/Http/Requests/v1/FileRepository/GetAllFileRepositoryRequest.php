@@ -28,13 +28,21 @@ class GetAllFileRepositoryRequest extends FormRequest
 
     public function rules(): array
     {
+        // 🎯 Dynamically fetch all valid configured disks (local, public, s3, r2, etc.)
+        $validDisks = implode(',', array_keys(config('filesystems.disks', [
+            'local'  => [],
+            'public' => [],
+            's3'     => [],
+            'r2'     => [],
+        ])));
+
         return [
             'search'         => ['nullable', 'string', 'min:1', 'max:100'],
             'offset'         => ['nullable', 'integer', 'min:0'],
             'limit'          => ['nullable', 'integer', 'min:1', 'max:' . self::MAX_LIMIT],
             'order_by'       => ['nullable', 'in:' . implode(',', $this->getValidColumns())],
             'order_dir'      => ['nullable', 'in:asc,desc'],
-            'disk'           => ['nullable', 'string', 'in:local,s3,public'],
+            'disk'           => ['nullable', 'string', 'in:' . $validDisks], // ✅ NOW INCLUDES 'r2'
             'mime_type'      => ['nullable', 'string'],
             'is_encrypted'   => ['nullable', 'boolean'],
             'uploaded_by'    => ['nullable', 'integer', 'exists:users,id'],

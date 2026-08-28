@@ -15,11 +15,16 @@ class CreateDocumentVersionAction
 
     public function execute(CreateDocumentVersionDTO $dto): DocumentVersion
     {
+        // 🎯 Environment-aware disk (local/public in dev, r2 in production)
+        $disk = config('filesystems.default', 'public');
+
         // ─── Get next version number ───────────────────────────
         $versionNumber = $this->repository->getNextVersionNumber($dto->applicantDocumentId);
 
         // ─── Store physical file ───────────────────────────────
-        $filePath = Storage::disk('local')->putFile(
+        // NOTE: do not pass 'public' ACL visibility here.
+        // Cloudflare R2 does not support S3 ACLs.
+        $filePath = Storage::disk($disk)->putFile(
             'documents/versions/' . date('Y/m'),
             $dto->file
         );
@@ -31,10 +36,12 @@ class CreateDocumentVersionAction
         return $this->repository->create([
             'applicant_document_id' => $dto->applicantDocumentId,
             'version_number'        => $versionNumber,
-            'file_path'             => $filePath,
+            'file_path'             => $filePath, // relative path only
             'file_name'             => $dto->file->getClientOriginalName(),
             'file_size'             => $dto->file->getSize(),
             'mime_type'             => $dto->file->getMimeType(),
+            'disk'                  => $disk, // keep if column exists
+            'storage_driver'        => $disk, // keep if column exists
             'extracted_data'        => $dto->extractedData,
             'change_reason'         => $dto->changeReason,
             'uploaded_by'           => $dto->uploadedBy,

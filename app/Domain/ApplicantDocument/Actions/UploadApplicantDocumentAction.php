@@ -26,7 +26,12 @@ class UploadApplicantDocumentAction
 
     public function execute(UploadApplicantDocumentDTO $dto): ApplicantDocument
     {
-        $document = DB::transaction(function () use ($dto) {
+        // 🎯 DYNAMIC DISK RESOLUTION (Reads FILESYSTEM_DISK from .env)
+        // Local dev: 'public' or 'local'
+        // Production: 'r2'
+        $disk = config('filesystems.default', 'public');
+
+        $document = DB::transaction(function () use ($dto, $disk) {
 
             // ─── Generate file hash ────────────────────────────────
             $fileHash = hash_file('sha256', $dto->file->getRealPath());
@@ -38,7 +43,8 @@ class UploadApplicantDocumentAction
                 $fileRecord->incrementReferenceCount();
                 $filePath = $fileRecord->file_path;
             } else {
-                $filePath = Storage::disk('local')->putFile(
+                // ✅ Store dynamically on active disk (Local or R2)
+                $filePath = Storage::disk($disk)->putFile(
                     'documents/' . date('Y/m'),
                     $dto->file
                 );
@@ -49,8 +55,8 @@ class UploadApplicantDocumentAction
                     'original_name'   => $dto->file->getClientOriginalName(),
                     'mime_type'       => $dto->file->getMimeType(),
                     'file_size'       => $dto->file->getSize(),
-                    'disk'            => 'local',
-                    'storage_driver'  => 'local',
+                    'disk'            => $disk, 
+                    'storage_driver'  => $disk, 
                     'reference_count' => 1,
                     'uploaded_by'     => $dto->uploadedBy,
                 ]);

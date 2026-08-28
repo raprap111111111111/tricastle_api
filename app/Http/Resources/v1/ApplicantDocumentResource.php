@@ -11,8 +11,15 @@ class ApplicantDocumentResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $path = $this->file_path ?? $this->path ?? $this->fileRepository?->file_path ?? null;
-        $diskName = $this->disk ?? $this->fileRepository?->disk ?? config('filesystems.default', 'public');
+        $path = $this->file_path
+            ?? $this->path
+            ?? $this->fileRepository?->file_path
+            ?? null;
+
+        $diskName = $this->disk
+            ?? $this->fileRepository?->disk
+            ?? $this->fileRepository?->storage_driver
+            ?? config('filesystems.default', 'public');
 
         $fileUrl = null;
 
@@ -21,29 +28,55 @@ class ApplicantDocumentResource extends JsonResource
                 /** @var FilesystemAdapter $disk */
                 $disk = Storage::disk($diskName);
 
-                if (in_array($diskName, ['r2', 's3']) && method_exists($disk, 'temporaryUrl')) {
-                    $fileUrl = $disk->temporaryUrl($path, now()->addHours(4));
+                // Prefer temporary signed URL for private cloud disks
+                if (
+                    in_array($diskName, ['r2', 's3'], true)
+                    && method_exists($disk, 'temporaryUrl')
+                ) {
+                    try {
+                        // Some adapters expose providesTemporaryUrls()
+                        if (!method_exists($disk, 'providesTemporaryUrls') || $disk->providesTemporaryUrls()) {
+                            $fileUrl = $disk->temporaryUrl($path, now()->addHours(4));
+                        } else {
+                            $fileUrl = $disk->url($path);
+                        }
+                    } catch (\Throwable $e) {
+                        // Fall back to normal url()/preview
+                        $fileUrl = method_exists($disk, 'url') ? $disk->url($path) : null;
+                    }
                 } else {
-                    $fileUrl = $disk->url($path);
+                    $fileUrl = method_exists($disk, 'url') ? $disk->url($path) : null;
                 }
             } catch (\Throwable $e) {
+                $fileUrl = null;
             }
         }
 
-        // 🎯 BULLETPROOF FIX: If URL is null OR points to /storage/ (which causes 404s on Render), OVERRIDE IT.
-        if (!$fileUrl || !str_starts_with($fileUrl, 'http') || str_contains($fileUrl, '/storage/')) {
-            if ($this->id) {
-                // Force it through our secure PHP streaming endpoint
-                $fileUrl = url("/api/v1/applicant-documents/{$this->id}/preview");
-            }
+        /**
+         * Fallback rules:
+         * - always fallback if URL missing/relative
+         * - in production, also fallback if URL points to /storage/ (ephemeral disk platforms)
+         * - in local, keep /storage/ URLs
+         */
+        $isLocal = app()->environment('local')
+            || str_contains((string) config('app.url'), 'localhost')
+            || str_contains((string) config('app.url'), '127.0.0.1');
+
+        $needsPreviewFallback =
+            !$fileUrl
+            || !str_starts_with($fileUrl, 'http')
+            || (!$isLocal && str_contains($fileUrl, '/storage/'));
+
+        if ($needsPreviewFallback && $this->id) {
+            $fileUrl = url("/api/v1/applicant-documents/{$this->id}/preview");
         }
 
-        // Only force HTTPS outside of local development
+        // Force HTTPS outside local development
         if (
-            $fileUrl &&
-            str_starts_with($fileUrl, 'http://') &&
-            !str_contains($fileUrl, 'localhost') &&
-            !str_contains($fileUrl, '127.0.0.1')
+            $fileUrl
+            && str_starts_with($fileUrl, 'http://')
+            && !str_contains($fileUrl, 'localhost')
+            && !str_contains($fileUrl, '127.0.0.1')
         ) {
             $fileUrl = str_replace('http://', 'https://', $fileUrl);
         }
@@ -59,11 +92,11 @@ class ApplicantDocumentResource extends JsonResource
             'file_size'           => $this->file_size ?? $this->fileRepository?->file_size,
             'mime_type'           => $this->mime_type ?? $this->fileRepository?->mime_type,
 
-            // 🎯 NOW GUARANTEED TO BE /PREVIEW IF CLOUD URL FAILS
             'file_url'            => $fileUrl,
             'url'                 => $fileUrl,
             'public_url'          => $fileUrl,
             'file_path'           => $path,
+            'disk'                => $diskName,
 
             'extracted_data'      => $this->extracted_data,
             'validated_data'      => $this->validated_data,
@@ -88,12 +121,12 @@ class ApplicantDocumentResource extends JsonResource
             'notes'               => $this->notes,
             'metadata'            => $this->metadata,
 
-            'applicant'           => $this->whenLoaded('applicant', fn () => [
+            'applicant'           => $this->whenLoaded('applicant', fn() => [
                 'id'        => $this->applicant->id,
                 'full_name' => $this->applicant->full_name,
                 'email'     => $this->applicant->email,
             ]),
-            'document_type'       => $this->whenLoaded('documentType', fn () => [
+            'document_type'       => $this->whenLoaded('documentType', fn() => [
                 'id'   => $this->documentType->id,
                 'name' => $this->documentType->name,
                 'code' => $this->documentType->code,
