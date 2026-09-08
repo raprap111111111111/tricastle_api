@@ -25,7 +25,10 @@ class UpdateUserRequest extends FormRequest
             'suffix'        => ['nullable', 'string', 'max:20'],
 
             'email' => [
-                'sometimes', 'required', 'email', 'max:255',
+                'sometimes',
+                'required',
+                'email',
+                'max:255',
                 Rule::unique('users', 'email')->ignore($userId),
             ],
             'phone'  => ['nullable', 'string', 'max:20'],
@@ -33,13 +36,16 @@ class UpdateUserRequest extends FormRequest
 
             'password' => ['sometimes', 'nullable', 'confirmed', Password::defaults()],
 
-            'avatar'        => ['nullable', 'string', 'max:500'],
+       
+            'avatar' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'], // 5MB max image
             'bio'           => ['nullable', 'string', 'max:1000'],
             'date_of_birth' => ['nullable', 'date', 'before:today'],
             'gender'        => ['nullable', 'in:male,female,other'],
 
             'employee_code' => [
-                'nullable', 'string', 'max:50',
+                'nullable',
+                'string',
+                'max:50',
                 Rule::unique('users', 'employee_code')->ignore($userId),
             ],
             'department'    => ['nullable', 'string', 'max:100'],

@@ -8,6 +8,7 @@ use App\Domain\User\Actions\CreateUserAction;
 use App\Domain\User\Actions\DeleteUserAction;
 use App\Domain\User\Actions\GetUserAction;
 use App\Domain\User\Actions\ListUsersAction;
+use App\Domain\User\Actions\StreamUserAvatarAction;
 use App\Domain\User\Actions\ToggleUserActiveAction;
 use App\Domain\User\Actions\UpdateUserAction;
 use App\Domain\User\Mappers\UserMapper;
@@ -20,6 +21,7 @@ use App\Http\Requests\v1\User\UpdateUserRequest;
 use App\Http\Resources\v1\UserResource;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class UserController extends Controller
 {
@@ -31,6 +33,7 @@ class UserController extends Controller
         private readonly DeleteUserAction       $deleteAction,
         private readonly ToggleUserActiveAction $toggleAction,
         private readonly AssignRolesAction      $assignRolesAction,
+        private readonly StreamUserAvatarAction $streamAvatarAction,
     ) {}
 
     public function index(GetAllUserRequest $request): JsonResponse
@@ -107,5 +110,14 @@ class UserController extends Controller
             new UserResource($updated),
             'Roles assigned successfully'
         );
+    }
+
+    /**
+     * Stream user avatar through API (R2/local) — avoids direct r2 URL/CORS/DNS issues.
+     * GET /api/v1/users/{user}/avatar
+     */
+    public function avatar(User $user): StreamedResponse
+    {
+        return $this->streamAvatarAction->execute($user);
     }
 }

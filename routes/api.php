@@ -4,6 +4,7 @@
 use App\Http\Controllers\v1\ApplicantDocumentController;
 use App\Http\Controllers\v1\AuthController;
 use App\Http\Controllers\v1\HealthController;
+use App\Http\Controllers\v1\UserController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -12,10 +13,9 @@ Route::prefix('v1')->group(function () {
     // 🔓 PUBLIC ROUTES (No Auth Required)
     // ============================================
 
-    // 🟢 KEEP-ALIVE HEALTH ENDPOINT
     Route::get('/health', HealthController::class)->name('health');
 
-    // 🟢 PUBLIC DOCUMENT STREAMING
+    // Document streaming (blob preview/download via API)
     Route::prefix('applicant-documents')->group(function () {
         Route::get('/{applicantDocument}/preview', [ApplicantDocumentController::class, 'preview'])
             ->whereNumber('applicantDocument');
@@ -26,6 +26,12 @@ Route::prefix('v1')->group(function () {
         Route::get('/{applicantDocument}/download', [ApplicantDocumentController::class, 'download'])
             ->whereNumber('applicantDocument');
     });
+
+    // Optional: public avatar stream (so <img src="..."> works without Authorization header)
+    // If you prefer avatars auth-only, remove this block and keep only the route in user.php
+    Route::get('/users/{user}/avatar', [UserController::class, 'avatar'])
+        ->whereNumber('user')
+        ->name('users.avatar.public');
 
     Route::prefix('auth')->group(function () {
         Route::post('/login', [AuthController::class, 'login'])->name('auth.login');
@@ -52,7 +58,5 @@ Route::prefix('v1')->group(function () {
         foreach (glob(__DIR__ . '/api/v1/*.php') as $routeFile) {
             require $routeFile;
         }
-
     });
-
 });

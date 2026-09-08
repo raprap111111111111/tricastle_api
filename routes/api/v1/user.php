@@ -8,9 +8,11 @@ Route::apiResource('users', UserController::class);
 
 Route::prefix('users/{user}')->group(function () {
     Route::post('toggle-active', [UserController::class, 'toggleActive'])
-         ->name('users.toggle-active');
+        ->name('users.toggle-active');
+
     Route::post('assign-roles', [UserController::class, 'assignRoles'])
-         ->name('users.assign-roles');
+        ->name('users.assign-roles');
+
     Route::post('reset-password', [UserController::class, 'resetPassword'])
-         ->name('users.reset-password');
+        ->name('users.reset-password');
 });

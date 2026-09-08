@@ -13,15 +13,50 @@ class UserService
         return Hash::make($password);
     }
 
+    /**
+     * Upload avatar to default disk (R2 when FILESYSTEM_DISK=r2).
+     */
     public function uploadAvatar(UploadedFile $file): string
     {
-        return $file->store('avatars', 'public');
+        $disk = config('filesystems.default', 'public');
+
+        return $file->store('avatars', $disk);
     }
 
+    /**
+     * Delete avatar from storage (skip external URLs).
+     */
     public function deleteAvatar(?string $path): void
     {
-        if ($path && Storage::disk('public')->exists($path)) {
-            Storage::disk('public')->delete($path);
+        if (empty($path)) {
+            return;
+        }
+
+        $path = str_replace('\\', '/', $path);
+
+        // OAuth / full URL avatars are not stored on our disk
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return;
+        }
+
+        $candidates = array_values(array_unique(array_filter([
+            config('filesystems.default', 'public'),
+            'r2',
+            's3',
+            'public',
+            'local',
+        ])));
+
+        foreach ($candidates as $diskName) {
+            try {
+                $disk = Storage::disk($diskName);
+                if ($disk->exists($path)) {
+                    $disk->delete($path);
+                    return;
+                }
+            } catch (\Throwable) {
+                continue;
+            }
         }
     }
 }

@@ -5,34 +5,34 @@ namespace App\Http\Controllers\v1;
 use App\Domain\ApplicantDocument\Actions\DeleteApplicantDocumentAction;
 use App\Domain\ApplicantDocument\Actions\GetApplicantDocumentAction;
 use App\Domain\ApplicantDocument\Actions\GetApplicantFolderAction;
+use App\Domain\ApplicantDocument\Actions\GetExpiringDocumentsAction;
 use App\Domain\ApplicantDocument\Actions\ListApplicantDocumentFoldersAction;
 use App\Domain\ApplicantDocument\Actions\ListApplicantDocumentsAction;
 use App\Domain\ApplicantDocument\Actions\ListDocumentBatchesAction;
 use App\Domain\ApplicantDocument\Actions\RejectApplicantDocumentAction;
+use App\Domain\ApplicantDocument\Actions\StreamApplicantDocumentAction;
 use App\Domain\ApplicantDocument\Actions\UpdateApplicantDocumentAction;
 use App\Domain\ApplicantDocument\Actions\UpdateApplicantDocumentStatusAction;
 use App\Domain\ApplicantDocument\Actions\UploadApplicantDocumentAction;
 use App\Domain\ApplicantDocument\Actions\VerifyApplicantDocumentAction;
-use App\Domain\ApplicantDocument\Actions\GetExpiringDocumentsAction;
 use App\Domain\ApplicantDocument\DTOs\UploadApplicantDocumentDTO;
 use App\Domain\ApplicantDocument\Mappers\ApplicantDocumentMapper;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\v1\ApplicantDocument\DeleteApplicantDocumentRequest;
 use App\Http\Requests\v1\ApplicantDocument\GetAllApplicantDocumentRequest;
 use App\Http\Requests\v1\ApplicantDocument\GetApplicantDocumentRequest;
+use App\Http\Requests\v1\ApplicantDocument\GetExpiringDocumentsRequest;
 use App\Http\Requests\v1\ApplicantDocument\RejectApplicantDocumentRequest;
 use App\Http\Requests\v1\ApplicantDocument\UpdateApplicantDocumentRequest;
 use App\Http\Requests\v1\ApplicantDocument\UpdateApplicantDocumentStatusRequest;
 use App\Http\Requests\v1\ApplicantDocument\UploadApplicantDocumentRequest;
 use App\Http\Requests\v1\ApplicantDocument\UploadNewVersionRequest;
 use App\Http\Requests\v1\ApplicantDocument\VerifyApplicantDocumentRequest;
-use App\Http\Requests\v1\ApplicantDocument\GetExpiringDocumentsRequest;
 use App\Http\Resources\v1\ApplicantDocumentResource;
 use App\Models\ApplicantDocument;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ApplicantDocumentController extends Controller
@@ -40,7 +40,7 @@ class ApplicantDocumentController extends Controller
     public function __construct(
         private readonly ListApplicantDocumentsAction        $listAction,
         private readonly ListDocumentBatchesAction           $listBatchesAction,
-        private readonly ListApplicantDocumentFoldersAction $listFoldersAction,
+        private readonly ListApplicantDocumentFoldersAction  $listFoldersAction,
         private readonly GetApplicantFolderAction            $getFolderAction,
         private readonly GetApplicantDocumentAction          $getAction,
         private readonly UploadApplicantDocumentAction       $uploadAction,
@@ -50,7 +50,12 @@ class ApplicantDocumentController extends Controller
         private readonly RejectApplicantDocumentAction       $rejectAction,
         private readonly UpdateApplicantDocumentStatusAction $updateStatusAction,
         private readonly GetExpiringDocumentsAction          $getExpiringDocumentsAction,
+        private readonly StreamApplicantDocumentAction       $streamAction,
     ) {}
+
+    // ── batches, folders, folder, index, expiring, show, store,
+    //    uploadVersion, update, destroy, verify, reject, updateStatus
+    //    → KEEP EXACTLY AS YOU HAVE THEM (unchanged) ──
 
     public function batches(Request $request): JsonResponse
     {
@@ -230,147 +235,26 @@ class ApplicantDocumentController extends Controller
     }
 
     /**
-     * Stream file inline (Supports local, public, r2, and s3)
-     * GET /api/v1/applicant-documents/{applicantDocument}/preview
-     * GET /api/v1/applicant-documents/{applicantDocument}/file
+     * GET .../preview — stream inline (no R2 redirect)
      */
-    public function preview(ApplicantDocument $applicantDocument)
+    public function preview(ApplicantDocument $applicantDocument): StreamedResponse
     {
-        [$diskInstance, $diskName, $path] = $this->resolveDiskInfo($applicantDocument);
-
-        if (!$diskInstance || !$path) {
-            abort(404, 'File not found on storage server.');
-        }
-
-        $mime     = $applicantDocument->mime_type ?? 'application/octet-stream';
-        $filename = $applicantDocument->file_name ?? 'document';
-
-        // Common headers (including CORS so <img> from Vercel works)
-        $headers = [
-            'Content-Type'                 => $mime,
-            'Content-Disposition'          => 'inline; filename="' . addslashes($filename) . '"',
-            'Cache-Control'                => 'public, max-age=86400',
-            'Access-Control-Allow-Origin'  => '*',
-            'Access-Control-Allow-Methods' => 'GET, OPTIONS',
-            'Access-Control-Allow-Headers' => 'Content-Type, Authorization',
-        ];
-
-        // ── Cloud storage (R2 / S3) ──────────────────────────────────────────
-        if (in_array($diskName, ['r2', 's3'], true)) {
-            try {
-                // Prefer temporary signed URL when available (fastest + works everywhere)
-                if (method_exists($diskInstance, 'temporaryUrl') && $diskInstance->providesTemporaryUrls()) {
-                    $tempUrl = $diskInstance->temporaryUrl($path, now()->addMinutes(60));
-                    return redirect()->away($tempUrl);
-                }
-            } catch (\Throwable $e) {
-                // fall through to stream
-            }
-
-            // Fallback: stream the file ourselves
-            return response()->stream(
-                function () use ($diskInstance, $path) {
-                    $stream = $diskInstance->readStream($path);
-                    if ($stream) {
-                        fpassthru($stream);
-                        if (is_resource($stream)) {
-                            fclose($stream);
-                        }
-                    }
-                },
-                200,
-                $headers
-            );
-        }
-
-        // ── Local / public disk ──────────────────────────────────────────────
-        $fullPath = $diskInstance->path($path);
-
-        if (!file_exists($fullPath)) {
-            abort(404, 'File not found on local disk.');
-        }
-
-        return response()->file($fullPath, $headers);
-    }
-
-    public function file(ApplicantDocument $applicantDocument)
-    {
-        return $this->preview($applicantDocument);
-    }
-
-    public function download(ApplicantDocument $applicantDocument): StreamedResponse
-    {
-        [$diskInstance, $diskName, $path] = $this->resolveDiskInfo($applicantDocument);
-
-        if (!$diskInstance || !$path) {
-            abort(404, 'File not found on server.');
-        }
-
-        $filename = $applicantDocument->file_name ?? 'document';
-        $mime     = $applicantDocument->mime_type ?? 'application/octet-stream';
-
-        return $diskInstance->download($path, $filename, [
-            'Content-Type' => $mime,
-        ]);
+        return $this->streamAction->execute($applicantDocument, 'inline');
     }
 
     /**
-     * ✅ REUSABLE DISK RESOLVER
+     * GET .../file — alias of preview
      */
-    private function resolveDiskInfo(ApplicantDocument $doc): array
+    public function file(ApplicantDocument $applicantDocument): StreamedResponse
     {
-        $path = $doc->file_path
-            ?? $doc->fileRepository?->file_path
-            ?? null;
-
-        if (empty($path)) {
-            return [null, null, null];
-        }
-
-        // Preferred disk from DB records
-        $preferredDisk = $doc->disk
-            ?? $doc->fileRepository?->disk
-            ?? $doc->fileRepository?->storage_driver
-            ?? null;
-
-        // Default disk from environment (.env FILESYSTEM_DISK)
-        $defaultDisk = config('filesystems.default', 'public');
-
-        // Build unique candidate list
-        $candidates = array_values(array_unique(array_filter([
-            $preferredDisk,
-            $defaultDisk,
-            'r2',
-            's3',
-            'public',
-            'local',
-        ])));
-
-        foreach ($candidates as $name) {
-            try {
-                $disk = Storage::disk($name);
-
-                if ($disk->exists($path)) {
-                    return [$disk, $name, $path];
-                }
-            } catch (\Throwable $e) {
-                continue;
-            }
-        }
-
-        return [null, null, null];
+        return $this->streamAction->execute($applicantDocument, 'inline');
     }
 
-    private function echoStream(mixed $stream): void
+    /**
+     * GET .../download — stream as attachment
+     */
+    public function download(ApplicantDocument $applicantDocument): StreamedResponse
     {
-        if (!$stream || !is_resource($stream)) {
-            return;
-        }
-        
-        while (!feof($stream)) {
-            echo fread($stream, 1024 * 8);
-            flush();
-        }
-        fclose($stream);
+        return $this->streamAction->execute($applicantDocument, 'attachment');
     }
 }
