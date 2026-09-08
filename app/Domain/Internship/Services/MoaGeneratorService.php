@@ -279,6 +279,14 @@ class MoaGeneratorService
         ]);
     }
 
+    private function urlFor(InternshipDocument $doc): string
+    {
+        return Storage::disk($this->disk())->temporaryUrl(
+            $doc->file_path,
+            now()->addMinutes(60)   // link expires after 1 hour
+        );
+    }
+
     public function generateBulk(Collection $internships, GenerateMoaDTO $dto): array
     {
         $docs = collect();
@@ -288,24 +296,22 @@ class MoaGeneratorService
 
         if ($docs->count() === 1) {
             return [
-                'type' => 'single',
+                'type'      => 'single',
                 'documents' => $docs,
-                'download' => $this->urlFor($docs->first()),
+                'download'  => $this->urlFor($docs->first()),
             ];
         }
 
         $zipPath = $this->zip($docs);
 
         return [
-            'type' => 'zip',
+            'type'      => 'zip',
             'documents' => $docs,
-            'download' => Storage::disk($this->disk())->url($zipPath),
+            'download'  => Storage::disk($this->disk())->temporaryUrl(
+                $zipPath,
+                now()->addMinutes(60)
+            ),
         ];
-    }
-
-    private function urlFor(InternshipDocument $doc): string
-    {
-        return Storage::disk($this->disk())->url($doc->file_path);
     }
 
     private function nextDocumentNo(): string
