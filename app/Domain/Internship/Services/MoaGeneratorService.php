@@ -163,6 +163,29 @@ class MoaGeneratorService
     {
         $payload = $this->resolver->resolve($internship, $dto);
 
+        // ────────────────────────────────────────────────
+        // 1. Reuse existing document if data has not changed
+        // ────────────────────────────────────────────────
+        $existing = InternshipDocument::query()
+            ->where('applicant_internship_id', $internship->id)
+            ->where('document_type', 'moa')
+            ->where('status', 'generated')
+            ->latest('id')
+            ->first();
+
+        if ($existing && $this->payloadMatches($existing->snapshot, $payload)) {
+            Log::info('[MOA] Reusing existing document (data unchanged)', [
+                'internship_id' => $internship->id,
+                'document_id'   => $existing->id,
+                'file_path'     => $existing->file_path,
+            ]);
+
+            return $existing;
+        }
+
+        // ────────────────────────────────────────────────
+        // 2. Data changed → generate a new document
+        // ────────────────────────────────────────────────
         $templatePath = $this->resolveTemplatePath();
         $this->assertValidDocx($templatePath);
 
@@ -236,10 +259,7 @@ class MoaGeneratorService
                 'MEAL' => number_format($meal),
             ]);
 
-            // Save to working output file
             $templateProcessor->saveAs($outFile);
-
-            // 🎯 Post-process to guarantee removal of any leftover {{ and }} around generated text
             $this->postProcessRemoveDoubleBraces($outFile);
 
             $code = preg_replace('/[^A-Za-z0-9_-]/', '', (string) ($payload['intern']['code'] ?? ''));
@@ -277,6 +297,42 @@ class MoaGeneratorService
             'generated_by' => $dto->generatedBy,
             'snapshot' => $payload,
         ]);
+    }
+
+    /**
+     * Compare two payloads and decide if they are identical for MOA purposes.
+     * We ignore timestamps and generated_by because they always change.
+     */
+    private function payloadMatches(?array $old, array $new): bool
+    {
+        if (empty($old)) {
+            return false;
+        }
+
+        // Keys that should NOT affect "is data the same?"
+        $ignore = [
+            'agreement_date_raw',
+            'agreement_day_ordinal',
+            'agreement_month',
+            'agreement_year',
+            // add more if needed
+        ];
+
+        $normalize = function (array $data) use ($ignore): array {
+            foreach ($ignore as $key) {
+                unset($data[$key]);
+            }
+            // Sort recursively so key order doesn't matter
+            array_walk_recursive($data, function (&$v) {
+                if (is_string($v)) {
+                    $v = trim($v);
+                }
+            });
+            ksort($data);
+            return $data;
+        };
+
+        return $normalize($old) === $normalize($new);
     }
 
     private function urlFor(InternshipDocument $doc): string
