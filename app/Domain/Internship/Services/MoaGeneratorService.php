@@ -42,8 +42,8 @@ class MoaGeneratorService
 
     private function resolveTemplatePath(): string
     {
-        $docx = storage_path('app/templates/MOA_MASTER_TEMPLATE.docx');
-        $doc  = storage_path('app/templates/MOA_MASTER_TEMPLATE.doc');
+        $docx = resource_path('templates/MOA_MASTER_TEMPLATE.docx');
+        $doc  = resource_path('templates/MOA_MASTER_TEMPLATE.doc');
 
         if (file_exists($docx) && filesize($docx) > 0) {
             return $docx;
