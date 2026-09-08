@@ -1,5 +1,7 @@
 <?php
 
+namespace App\Domain\FileRepository\Controllers; // Check your exact namespace if different, e.g. App\Http\Controllers\v1
+
 namespace App\Http\Controllers\v1;
 
 use App\Domain\FileRepository\Actions\DeleteFileRepositoryAction;
@@ -17,6 +19,8 @@ use App\Http\Requests\v1\FileRepository\UploadFileRepositoryRequest;
 use App\Http\Resources\v1\FileRepositoryResource;
 use App\Models\FileRepository;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class FileRepositoryController extends Controller
 {
@@ -45,6 +49,27 @@ class FileRepositoryController extends Controller
         return $this->responseSuccess(
             new FileRepositoryResource($result),
             'File retrieved successfully'
+        );
+    }
+
+    /**
+     * 🎯 Secure Download Stream (Bypasses R2 DNS/VPN Blocks)
+     */
+    /**
+     * 🎯 Secure Download Stream (Bypasses R2 DNS/VPN Blocks)
+     */
+    public function download(GetFileRepositoryRequest $request, FileRepository $fileRepository): StreamedResponse
+    {
+        /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
+        $disk = Storage::disk($fileRepository->disk);
+
+        if (!$disk->exists($fileRepository->file_path)) {
+            abort(404, 'File not found on storage server.');
+        }
+
+        return $disk->download(
+            $fileRepository->file_path,
+            $fileRepository->original_name
         );
     }
 

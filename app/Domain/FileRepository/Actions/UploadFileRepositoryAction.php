@@ -27,10 +27,12 @@ class UploadFileRepositoryAction
             return $existing;
         }
 
-        // ─── Store file ────────────────────────────────────────
-        $path = Storage::disk($dto->disk)->putFile(
+        // WITH THIS:
+        $fileName = $dto->file->getClientOriginalName(); // Gets the actual name like 'MOA_Test.docx'
+        $path = Storage::disk($dto->disk)->putFileAs(
             'uploads/' . date('Y/m'),
-            $dto->file
+            $dto->file,
+            $fileName
         );
 
         // ─── Create record ─────────────────────────────────────

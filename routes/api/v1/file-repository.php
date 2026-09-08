@@ -3,6 +3,12 @@
 use App\Http\Controllers\v1\FileRepositoryController;
 use Illuminate\Support\Facades\Route;
 
+// 🎯 Download route added here
+Route::get(
+    'file-repository/{file_repository}/download',
+    [FileRepositoryController::class, 'download']
+)->name('file-repository.download');
+
 Route::apiResource('file-repository', FileRepositoryController::class)
     ->except(['update']);
 
