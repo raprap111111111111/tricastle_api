@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
@@ -29,6 +30,26 @@ class Company extends Model
         'contact_phone',
         'description',
         'is_active',
+
+        // fillable additions
+        'name_on_document',
+        'registration_no',
+        'signatory_name',
+        'signatory_title',
+        'signatory_passport',
+        'signatory_id_type',
+        'signatory_id_no',
+        'signatory_id_issued',
+        'site_address',
+        'industry',
+
+        // activity logOnly additions
+        'name_on_document',
+        'signatory_name',
+        'signatory_title',
+        'is_active',
+
+
     ];
 
     protected $casts = [
@@ -87,6 +108,21 @@ class Company extends Model
     // ═══════════════════════════════════════════════════════
     // Relationships
     // ═══════════════════════════════════════════════════════
+    public function dispatchedPrograms(): HasMany
+    {
+        return $this->hasMany(InternshipProgram::class, 'dispatching_company_id');
+    }
+
+    public function acceptedPrograms(): HasMany
+    {
+        return $this->hasMany(InternshipProgram::class, 'accepting_company_id');
+    }
+
+    public function receivedInternships(): HasMany
+    {
+        return $this->hasMany(ApplicantInternship::class, 'receiving_company_id');
+    }
+
     public function category(): BelongsTo
     {
         return $this->belongsTo(CompanyCategory::class, 'category_id');

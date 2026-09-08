@@ -21,9 +21,9 @@ class Applicant extends Model
     protected $fillable = [
         // ── Identity & Trade ──────────────────────────────────────────────
         'applicant_code',
-        'applied_position',       
-        'trade_test_try',         
-        'trade_test_date',        
+        'applied_position',
+        'trade_test_try',
+        'trade_test_date',
         'first_name',
         'middle_name',
         'last_name',
@@ -32,10 +32,10 @@ class Applicant extends Model
         'phone',
         'mobile',
         'date_of_birth',
-        'birthplace',             
+        'birthplace',
         'gender',
         'civil_status',
-        'religion',               
+        'religion',
         'number_of_children',
         'nationality',
         'english_proficiency_pct',
@@ -62,16 +62,16 @@ class Applicant extends Model
         'pagibig_number',
 
         // ── Skill / Trade (Phase 1) ───────────────────────────────────────
-        'skill_category',           
-        'trade_or_occupation',      
+        'skill_category',
+        'trade_or_occupation',
 
         // ── Language (Phase 1) ────────────────────────────────────────────
         'understands_basic_english',
-        'jlpt_level',               
+        'jlpt_level',
 
         // ── Japan Deployment Readiness (Phase 1) ──────────────────────────
         'willing_to_be_deployed',
-        'japan_deployment_ready',   
+        'japan_deployment_ready',
         'preferred_work_location',
 
         // ── Prior Japan Experience (Phase 1) ──────────────────────────────
@@ -131,14 +131,14 @@ class Applicant extends Model
     protected $casts = [
         // ── Dates ─────────────────────────────────────────────────────────
         'date_of_birth'   => 'date',
-        'trade_test_date' => 'date',     
+        'trade_test_date' => 'date',
         'passport_expiry' => 'date',
         'final_listed_at' => 'datetime',
         'rejected_at'     => 'datetime',
 
         // ── Numerics ──────────────────────────────────────────────────────
         'number_of_children'      => 'integer',
-        'english_proficiency_pct' => 'integer',  
+        'english_proficiency_pct' => 'integer',
         'height_cm'               => 'decimal:2',
         'weight_kg'               => 'decimal:2',
         'quality_score'           => 'decimal:2',
@@ -316,6 +316,21 @@ class Applicant extends Model
     // ═══════════════════════════════════════════════════════
     // Relationships
     // ═══════════════════════════════════════════════════════
+
+    public function internships(): HasMany
+    {
+        return $this->hasMany(ApplicantInternship::class)->latest();
+    }
+
+    public function currentInternship(): HasOne
+    {
+        return $this->hasOne(ApplicantInternship::class)->where('is_current', true);
+    }
+
+    public function guarantors(): HasMany
+    {
+        return $this->hasMany(ApplicantGuarantor::class)->orderBy('sequence');
+    }
 
     public function family(): HasOne
     {

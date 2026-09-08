@@ -6,6 +6,7 @@ use App\Enums\BatchStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -24,6 +25,25 @@ class Batch extends Model
         'status',
         'is_active',
         'description',
+        // fillable
+        'internship_program_id',
+        'receiving_company_id',
+        'accepting_company_id',
+        'contract_start',
+        'contract_end',
+        'contract_years',
+        'stipend_amount',
+        'meal_allowance_amount',
+        'work_days',
+        'day_off',
+        'time_start',
+        'time_end',
+        'lunch_break',
+        'default_job_description',
+        'place_of_internship_override',
+        'municipality',
+
+
     ];
 
     protected $casts = [
@@ -80,6 +100,25 @@ class Batch extends Model
     // ═══════════════════════════════════════════════════════
     // Relationships
     // ═══════════════════════════════════════════════════════
+    public function internshipProgram(): BelongsTo
+    {
+        return $this->belongsTo(InternshipProgram::class);
+    }
+
+    public function receivingCompany(): BelongsTo
+    {
+        return $this->belongsTo(Company::class, 'receiving_company_id');
+    }
+
+    public function acceptingCompany(): BelongsTo
+    {
+        return $this->belongsTo(Company::class, 'accepting_company_id');
+    }
+
+    public function internships(): HasMany
+    {
+        return $this->hasMany(ApplicantInternship::class);
+    }
     public function applicantBatches(): HasMany
     {
         return $this->hasMany(ApplicantBatch::class);
@@ -88,23 +127,23 @@ class Batch extends Model
     public function applicants(): BelongsToMany
     {
         return $this->belongsToMany(Applicant::class, 'applicant_batches')
-                    ->withPivot([
-                        'id',
-                        'status',
-                        'assigned_at',
-                        'interview_date',
-                        'medical_date',
-                        'exam_date',
-                        'accepted_at',
-                        'deployed_at',
-                        'exam_score',
-                        'interview_notes',
-                        'medical_notes',
-                        'rejection_reason',
-                        'remarks',
-                        'processed_by',
-                    ])
-                    ->withTimestamps();
+            ->withPivot([
+                'id',
+                'status',
+                'assigned_at',
+                'interview_date',
+                'medical_date',
+                'exam_date',
+                'accepted_at',
+                'deployed_at',
+                'exam_score',
+                'interview_notes',
+                'medical_notes',
+                'rejection_reason',
+                'remarks',
+                'processed_by',
+            ])
+            ->withTimestamps();
     }
 
     // ═══════════════════════════════════════════════════════
