@@ -142,6 +142,22 @@ class DocumentTypeSeeder extends Seeder
                 'category'            => 'personal',
                 'sort_order'          => 10,
             ],
+
+            // Add this entry inside $types array (e.g. after ID_PHOTO)
+
+            [
+                'name'                => 'Memorandum of Agreement',
+                'code'                => 'MOA',
+                'description'         => 'System-generated Memorandum of Agreement for internship',
+                'required_fields'     => [],
+                'validation_rules'    => [],
+                'is_required'         => false,
+                'is_active'           => true,
+                'validity_days'       => null,
+                'expiry_warning_days' => 0,
+                'category'            => 'internship',
+                'sort_order'          => 11,
+            ],
         ];
 
         foreach ($types as $type) {

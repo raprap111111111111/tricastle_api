@@ -3,7 +3,9 @@
 namespace App\Domain\Internship\Services;
 
 use App\Domain\Internship\DTOs\GenerateMoaDTO;
+use App\Models\ApplicantDocument;
 use App\Models\ApplicantInternship;
+use App\Models\DocumentType;
 use App\Models\InternshipDocument;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -105,12 +107,10 @@ class MoaGeneratorService
                 continue;
             }
 
-            // 🎯 FIXED: return strip_tags($matches[0]) instead of '{{'.strip_tags(...).'}}'
             $repairedXml = preg_replace_callback('/\{\{(?:[^}]|<[^>]+>)*\}\}/s', function ($matches) {
                 return strip_tags($matches[0]);
             }, $xml);
 
-            // Clean up any pre-existing quadrupled braces ({{{{TAG}}}}) if present in XML
             if (is_string($repairedXml)) {
                 $repairedXml = str_replace(['{{{{', '}}}}'], ['{{', '}}'], $repairedXml);
             }
@@ -141,10 +141,8 @@ class MoaGeneratorService
                 continue;
             }
 
-            // Remove leftover {{ and }} wrapping around replaced values
             $cleanedXml = preg_replace_callback('/\{\{([^}]+)\}\}/u', function ($matches) {
                 $content = $matches[1];
-                // Keep unreplaced macro keys (e.g. UPPERCASE_WITH_UNDERSCORES) intact
                 if (preg_match('/^[A-Z0-9_]+$/', trim($content))) {
                     return $matches[0];
                 }
@@ -179,6 +177,9 @@ class MoaGeneratorService
                 'document_id'   => $existing->id,
                 'file_path'     => $existing->file_path,
             ]);
+
+            // 🎯 Ensure it exists in Applicant Documents folder UI
+            $this->syncToApplicantDocument($internship, $existing, $dto->generatedBy);
 
             return $existing;
         }
@@ -288,7 +289,7 @@ class MoaGeneratorService
             @unlink($outFile);
         }
 
-        return InternshipDocument::create([
+        $document = InternshipDocument::create([
             'applicant_internship_id' => $internship->id,
             'document_type' => 'moa',
             'document_no' => $this->nextDocumentNo(),
@@ -297,32 +298,119 @@ class MoaGeneratorService
             'generated_by' => $dto->generatedBy,
             'snapshot' => $payload,
         ]);
+
+        // 🎯 NEW: Mirror document to applicant_documents for the Documents UI
+        $this->syncToApplicantDocument($internship, $document, $dto->generatedBy);
+
+        return $document;
     }
 
     /**
-     * Compare two payloads and decide if they are identical for MOA purposes.
-     * We ignore timestamps and generated_by because they always change.
+     * 🎯 NEW: Helper to sync MOA into applicant_documents table
      */
+    private function syncToApplicantDocument(
+        ApplicantInternship $internship,
+        InternshipDocument $doc,
+        ?int $generatedBy
+    ): void {
+        try {
+            $documentType = DocumentType::where('code', 'MOA')->first();
+            if (! $documentType) {
+                Log::warning('[MOA] DocumentType code "MOA" not found in database. Skipping ApplicantDocument sync.');
+                return;
+            }
+
+            $applicantId = $internship->applicant_id;
+
+            // Prevent duplicate records for the same generated InternshipDocument
+            $alreadyExists = ApplicantDocument::where('applicant_id', $applicantId)
+                ->where('document_type_id', $documentType->id)
+                ->where('file_path', $doc->file_path)
+                ->exists();
+
+            if ($alreadyExists) {
+                return;
+            }
+
+            // Demote older MOA versions for this applicant
+            ApplicantDocument::where('applicant_id', $applicantId)
+                ->where('document_type_id', $documentType->id)
+                ->where('is_current_version', true)
+                ->update(['is_current_version' => false]);
+
+            // Calculate next version
+            $nextVersion = (int) ApplicantDocument::where('applicant_id', $applicantId)
+                ->where('document_type_id', $documentType->id)
+                ->max('version') + 1;
+
+            $disk = $this->disk();
+            $path = $doc->file_path;
+            $fileSize = null;
+
+            try {
+                if ($path && Storage::disk($disk)->exists($path)) {
+                    $fileSize = Storage::disk($disk)->size($path);
+                }
+            } catch (Throwable $e) {
+                $fileSize = null;
+            }
+
+            $extension = pathinfo((string) $path, PATHINFO_EXTENSION) ?: 'docx';
+            $mimeType  = match (strtolower($extension)) {
+                'pdf'   => 'application/pdf',
+                'docx'  => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'doc'   => 'application/msword',
+                default => 'application/octet-stream',
+            };
+
+            ApplicantDocument::create([
+                'applicant_id'       => $applicantId,
+                'document_type_id'   => $documentType->id,
+                'file_path'          => $path,
+                'file_name'          => basename((string) $path) ?: "MOA_{$doc->document_no}.docx",
+                'file_type'          => $extension,
+                'mime_type'          => $mimeType,
+                'file_size'          => $fileSize,
+                'status'             => 'verified', // Auto-verified since it's system-generated
+                'priority'           => 'normal',
+                'version'            => max(1, $nextVersion),
+                'is_current_version' => true,
+                'document_date'      => now()->toDateString(),
+                'is_expired'         => false,
+                'uploaded_by'        => $generatedBy,
+                'last_verified_at'   => now(),
+                'last_verified_by'   => $generatedBy,
+                'notes'              => 'Auto-generated Memorandum of Agreement',
+                'metadata'           => [
+                    'disk'                    => $disk,
+                    'source'                  => 'internship_moa',
+                    'internship_document_id'  => $doc->id,
+                    'applicant_internship_id' => $internship->id,
+                    'document_no'             => $doc->document_no,
+                ],
+            ]);
+        } catch (Throwable $e) {
+            Log::error('[MOA] Failed to sync to ApplicantDocument: ' . $e->getMessage());
+        }
+    }
+
     private function payloadMatches(?array $old, array $new): bool
     {
         if (empty($old)) {
             return false;
         }
 
-        // Keys that should NOT affect "is data the same?"
         $ignore = [
             'agreement_date_raw',
             'agreement_day_ordinal',
             'agreement_month',
             'agreement_year',
-            // add more if needed
         ];
 
         $normalize = function (array $data) use ($ignore): array {
             foreach ($ignore as $key) {
                 unset($data[$key]);
             }
-            // Sort recursively so key order doesn't matter
             array_walk_recursive($data, function (&$v) {
                 if (is_string($v)) {
                     $v = trim($v);
@@ -339,7 +427,7 @@ class MoaGeneratorService
     {
         return Storage::disk($this->disk())->temporaryUrl(
             $doc->file_path,
-            now()->addMinutes(60)   // link expires after 1 hour
+            now()->addMinutes(60)
         );
     }
 
