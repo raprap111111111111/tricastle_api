@@ -14,11 +14,12 @@ class GetAllApplicantDocumentRequest extends FormRequest
 
     public function authorize(): bool
     {
-        return $this->user()->can('viewAny', ApplicantDocument::class);
+        return $this->user()?->can('viewAny', ApplicantDocument::class) ?? false;
     }
 
     protected function prepareForValidation(): void
     {
+        // Fallback sanitization for sorting & pagination
         $this->merge([
             'order_by'  => $this->getValidOrderBy(),
             'order_dir' => $this->getValidOrderDir(),
@@ -32,7 +33,7 @@ class GetAllApplicantDocumentRequest extends FormRequest
             'search'               => ['nullable', 'string', 'min:1', 'max:100'],
             'offset'               => ['nullable', 'integer', 'min:0'],
             'limit'                => ['nullable', 'integer', 'min:1', 'max:' . self::MAX_LIMIT],
-            'order_by'             => ['nullable', 'in:' . implode(',', $this->getValidColumns())],
+            'order_by'             => ['nullable', 'string'],
             'order_dir'            => ['nullable', 'in:asc,desc'],
 
             // Filters
@@ -54,21 +55,31 @@ class GetAllApplicantDocumentRequest extends FormRequest
 
     protected function getValidOrderBy(): string
     {
-        return in_array($this->input('order_by'), $this->getValidColumns())
-            ? $this->input('order_by')
+        $orderBy = $this->input('order_by');
+
+        return is_string($orderBy) && in_array($orderBy, $this->getValidColumns(), true)
+            ? $orderBy
             : self::DEFAULT_ORDER_BY;
     }
 
     protected function getValidOrderDir(): string
     {
-        return in_array(strtolower($this->input('order_dir')), ['asc', 'desc'])
-            ? strtolower($this->input('order_dir'))
+        $orderDir = strtolower((string) $this->input('order_dir'));
+
+        return in_array($orderDir, ['asc', 'desc'], true)
+            ? $orderDir
             : self::DEFAULT_ORDER_DIR;
     }
 
     protected function getValidLimit(): int
     {
-        return max(1, min(self::MAX_LIMIT, (int) $this->input('limit', self::DEFAULT_LIMIT)));
+        $limit = $this->input('limit');
+
+        if (!is_numeric($limit)) {
+            return self::DEFAULT_LIMIT;
+        }
+
+        return max(1, min(self::MAX_LIMIT, (int) $limit));
     }
 
     protected function getValidColumns(): array

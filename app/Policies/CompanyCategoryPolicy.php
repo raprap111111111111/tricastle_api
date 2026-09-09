@@ -2,56 +2,56 @@
 
 namespace App\Policies;
 
-use App\Models\CompanyCategory;
+use App\Models\Applicant;
 use App\Models\User;
 
-class CompanyCategoryPolicy
+class ApplicantPolicy
 {
     /**
-     * Global bypass — super admins can do anything.
+     * Perform pre-authorization checks.
+     * Super admins or users with 'approval.bypass' bypass all policy checks.
      */
     public function before(User $user, string $ability): ?bool
     {
-        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+        if ((method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) || $user->can('approval.bypass')) {
             return true;
         }
 
-        return null; // fall through to normal checks
+        return null; // Fall through to standard policy checks
     }
 
     public function viewAny(User $user): bool
     {
-        // Changed _ to - and view to viewAny
-        return $user->can('company-category.viewAny');
+        return $user->can('applicant.viewAny');
     }
 
-    public function view(User $user, CompanyCategory $category): bool
+    public function view(User $user, Applicant $applicant): bool
     {
-        return $user->can('company-category.view');
+        return $user->can('applicant.view');
     }
 
     public function create(User $user): bool
     {
-        return $user->can('company-category.create');
+        return $user->can('applicant.create');
     }
 
-    public function update(User $user, CompanyCategory $category): bool
+    public function update(User $user, Applicant $applicant): bool
     {
-        return $user->can('company-category.update');
+        return $user->can('applicant.update');
     }
 
-    public function delete(User $user, CompanyCategory $category): bool
+    public function delete(User $user, Applicant $applicant): bool
     {
-        return $user->can('company-category.delete');
+        return $user->can('applicant.delete');
     }
 
-    public function restore(User $user, CompanyCategory $category): bool
+    public function assign(User $user, Applicant $applicant): bool
     {
-        return $user->can('company-category.delete');
+        return $user->can('applicant.assign');
     }
 
-    public function forceDelete(User $user, CompanyCategory $category): bool
+    public function transfer(User $user, Applicant $applicant): bool
     {
-        return $user->can('company-category.delete');
+        return $user->can('applicant.transfer');
     }
 }
