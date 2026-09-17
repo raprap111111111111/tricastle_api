@@ -3,6 +3,7 @@
 namespace App\Domain\Internship\Actions;
 
 use App\Domain\Internship\DTOs\SyncGuarantorsDTO;
+use App\Enums\CivilStatus;
 use App\Models\Applicant;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -22,12 +23,20 @@ class SyncGuarantorsAction
             $applicant = Applicant::findOrFail($dto->applicantId);
 
             foreach (array_values($dto->guarantors) as $index => $data) {
+                // Safely convert CivilStatus Enum object to scalar string value
+                $civilStatus = $data['civil_status'] ?? null;
+                if ($civilStatus instanceof CivilStatus) {
+                    $civilStatus = $civilStatus->value;
+                } elseif (is_string($civilStatus)) {
+                    $civilStatus = CivilStatus::tryFrom(strtolower($civilStatus))?->value ?? strtolower($civilStatus);
+                }
+
                 $applicant->guarantors()->updateOrCreate(
                     ['sequence' => $index + 1],
                     [
                         'full_name'                => $data['full_name'],
                         'age'                      => $data['age'] ?? null,
-                        'civil_status'             => $data['civil_status'] ?? null,
+                        'civil_status'             => $civilStatus,
                         'nationality'              => $data['nationality'] ?? 'Filipino',
                         'address'                  => $data['address'] ?? null,
                         'residence_cert_no'        => $data['residence_cert_no'] ?? null,

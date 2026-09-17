@@ -2,6 +2,8 @@
 
 namespace App\Domain\Applicant\DTOs;
 
+use App\Enums\CivilStatus;
+
 final readonly class UpdateApplicantDTO
 {
     public function __construct(
@@ -15,7 +17,7 @@ final readonly class UpdateApplicantDTO
         public ?string $mobile            = null,
         public ?string $dateOfBirth       = null,
         public ?string $gender            = null,
-        public ?string $civilStatus       = null,
+        public CivilStatus|string|null $civilStatus       = null,
         public ?int    $numberOfChildren  = null,
         public ?string $nationality       = null,
         
@@ -41,12 +43,13 @@ final readonly class UpdateApplicantDTO
         public ?string $postalCode        = null,
 
         // ── Passport / IDs ────────────────────────────────────────────
-        public ?string $passportNumber    = null,
-        public ?string $passportExpiry    = null,
-        public ?string $sssNumber         = null,
-        public ?string $tinNumber         = null,
-        public ?string $philhealthNumber  = null,
-        public ?string $pagibigNumber     = null,
+        public ?string $passportNumber          = null,
+        public ?string $passportExpiry          = null,
+        public ?int    $passportIssuingOfficeId = null, // Added Property
+        public ?string $sssNumber               = null,
+        public ?string $tinNumber               = null,
+        public ?string $philhealthNumber        = null,
+        public ?string $pagibigNumber           = null,
 
         // ── Skill / Trade ─────────────────────────────────────────────
         public ?string $skillCategory     = null,

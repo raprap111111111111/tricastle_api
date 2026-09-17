@@ -6,6 +6,7 @@ use App\Domain\ActivityLog\Traits\LogsActivity;
 use App\Domain\Applicant\DTOs\UpdateApplicantDTO;
 use App\Domain\Applicant\Repositories\ApplicantRepository;
 use App\Domain\Notification\Traits\HasNotifications;
+use App\Enums\CivilStatus;
 use App\Models\Applicant;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -35,7 +36,9 @@ class UpdateApplicantAction
                 'mobile'             => $dto->mobile,
                 'date_of_birth'      => $dto->dateOfBirth,
                 'gender'             => $dto->gender,
-                'civil_status'       => $dto->civilStatus,
+                'civil_status'       => $dto->civilStatus instanceof CivilStatus
+                                            ? $dto->civilStatus->value
+                                            : $dto->civilStatus,
                 'number_of_children' => $dto->numberOfChildren,
                 'nationality'        => $dto->nationality,
 
@@ -61,12 +64,13 @@ class UpdateApplicantAction
                 'postal_code'        => $dto->postalCode,
 
                 // ── Passport / IDs ───────────────────────────────────────────
-                'passport_number'    => $dto->passportNumber,
-                'passport_expiry'    => $dto->passportExpiry,
-                'sss_number'         => $dto->sssNumber,
-                'tin_number'         => $dto->tinNumber,
-                'philhealth_number'  => $dto->philhealthNumber,
-                'pagibig_number'     => $dto->pagibigNumber,
+                'passport_number'            => $dto->passportNumber,
+                'passport_expiry'            => $dto->passportExpiry,
+                'passport_issuing_office_id' => $dto->passportIssuingOfficeId, // Mapped
+                'sss_number'                 => $dto->sssNumber,
+                'tin_number'                 => $dto->tinNumber,
+                'philhealth_number'          => $dto->philhealthNumber,
+                'pagibig_number'             => $dto->pagibigNumber,
 
                 // ── Skill / Trade & Language ─────────────────────────────────
                 'skill_category'            => $dto->skillCategory,
@@ -177,17 +181,7 @@ class UpdateApplicantAction
                 'updated_by'   => $dto->reviewedBy,
             ]);
 
-            return $applicant->fresh([
-                'family',
-                'japanContacts',
-                'assignedStaff',
-                'reviewer',
-                'creator',
-                'lifestyle',
-                'educations',
-                'employments',
-                'tattoos',
-            ]);
+            return $applicant;
         });
 
         // ── 6. Send Notification ─────────────────────────────────────────────
@@ -204,6 +198,17 @@ class UpdateApplicantAction
             );
         }
 
-        return $updated;
+        return $updated->fresh([
+            'family',
+            'japanContacts',
+            'assignedStaff',
+            'reviewer',
+            'creator',
+            'lifestyle',
+            'educations',
+            'employments',
+            'tattoos',
+            'passportOffice', // Loaded on fresh model retrieval
+        ]);
     }
 }

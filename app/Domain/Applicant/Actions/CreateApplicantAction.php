@@ -7,6 +7,7 @@ use App\Domain\Applicant\DTOs\CreateApplicantDTO;
 use App\Domain\Applicant\Repositories\ApplicantRepository;
 use App\Domain\Applicant\Services\DuplicateDetectionService;
 use App\Domain\Notification\Traits\HasNotifications;
+use App\Enums\CivilStatus;
 use App\Exceptions\DuplicateApplicantException;
 use App\Models\Applicant;
 use Illuminate\Support\Facades\DB;
@@ -52,6 +53,11 @@ class CreateApplicantAction
                 );
             }
 
+            // Normalize civil status to value if an enum is passed
+            $civilStatus = $dto->civilStatus instanceof CivilStatus
+                ? $dto->civilStatus
+                : CivilStatus::tryFrom((string) $dto->civilStatus);
+
             // ── 2. Create main Applicant record ──────────────────────────────
             $applicant = $this->repository->create([
                 // ── Personal & Identity ──────────────────────────────────────
@@ -64,7 +70,7 @@ class CreateApplicantAction
                 'mobile'             => $dto->mobile,
                 'date_of_birth'      => $dto->dateOfBirth,
                 'gender'             => $dto->gender,
-                'civil_status'       => $dto->civilStatus,
+                'civil_status'       => $civilStatus?->value ?? $dto->civilStatus,
                 'number_of_children' => $dto->numberOfChildren,
                 'nationality'        => $dto->nationality,
 
@@ -90,12 +96,13 @@ class CreateApplicantAction
                 'postal_code'        => $dto->postalCode,
 
                 // ── Passport / IDs ───────────────────────────────────────────
-                'passport_number'    => $dto->passportNumber,
-                'passport_expiry'    => $dto->passportExpiry,
-                'sss_number'         => $dto->sssNumber,
-                'tin_number'         => $dto->tinNumber,
-                'philhealth_number'  => $dto->philhealthNumber,
-                'pagibig_number'     => $dto->pagibigNumber,
+                'passport_number'            => $dto->passportNumber,
+                'passport_expiry'            => $dto->passportExpiry,
+                'passport_issuing_office_id' => $dto->passportIssuingOfficeId, // Mapped
+                'sss_number'                 => $dto->sssNumber,
+                'tin_number'                 => $dto->tinNumber,
+                'philhealth_number'          => $dto->philhealthNumber,
+                'pagibig_number'             => $dto->pagibigNumber,
 
                 // ── Skill / Trade & Language ─────────────────────────────────
                 'skill_category'            => $dto->skillCategory,

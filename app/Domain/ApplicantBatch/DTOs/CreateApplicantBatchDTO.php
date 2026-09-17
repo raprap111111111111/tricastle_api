@@ -2,7 +2,7 @@
 
 namespace App\Domain\ApplicantBatch\DTOs;
 
-final readonly class ReturnApplicantBatchDTO
+final readonly class CreateApplicantBatchDTO
 {
     public function __construct(
         public string $returnReason,

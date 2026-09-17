@@ -18,36 +18,58 @@ class LegacyApplicantsSeeder extends Seeder
 {
     public function run(): void
     {
-        $filePath = database_path('seeders/data/legacy_applicants.csv');
+        $candidates = [
+            database_path('seeders/data/legacy_applicants.csv'),
+            public_path('legacy_applicants(final).csv'),
+            public_path('legacy_applicants.csv'),
+        ];
 
-        if (! file_exists($filePath)) {
-            $this->command?->error("❌ CSV file not found at: {$filePath}");
+        $filePath = null;
+        foreach ($candidates as $path) {
+            if (file_exists($path) && filesize($path) > 0) {
+                $filePath = $path;
+                break;
+            }
+        }
+
+        if (! $filePath) {
+            $this->command?->error('❌ CSV file not found.');
             return;
         }
 
-        if (filesize($filePath) === 0) {
-            $this->command?->error("❌ CSV file is empty (0 bytes).");
-            return;
+        $this->command?->info("📄 Found CSV: {$filePath}");
+        $this->command?->info('📦 Copying to isolated temp storage to prevent Docker I/O errors...');
+
+        // Copy file to /tmp to prevent Docker macOS errno=5 volume disconnects
+        $tmpPath = sys_get_temp_dir() . '/legacy_applicants_' . uniqid('', true) . '.csv';
+        
+        if (! @copy($filePath, $tmpPath)) {
+            // Fallback stream copy if simple copy fails
+            $in  = fopen($filePath, 'rb');
+            $out = fopen($tmpPath, 'wb');
+            if (! $in || ! $out) {
+                $this->command?->error('❌ Unable to copy CSV to temp.');
+                return;
+            }
+            stream_copy_to_stream($in, $out);
+            fclose($in);
+            fclose($out);
         }
 
-        $file = fopen($filePath, 'r');
+        $file = fopen($tmpPath, 'r');
         if (! $file) {
-            $this->command?->error('❌ Unable to open CSV file.');
+            $this->command?->error('❌ Unable to open temp CSV file.');
             return;
         }
 
-        $this->command?->info("🚀 Loading pre-fetched database lookups into memory...");
+        $this->command?->info('🚀 Loading pre-fetched database lookups into memory...');
 
-        // -------------------------------------------------------------
-        // 🚀 OPTIMIZATION 1: Pre-fetch existing records into HashMaps
-        // -------------------------------------------------------------
         $existingApplicants = Applicant::withTrashed()->pluck('id', 'applicant_code')->toArray();
         $existingBatches    = Batch::withTrashed()->pluck('id', 'batch_number')->toArray();
         $existingCompanies  = class_exists(Company::class) && Schema::hasTable('companies')
             ? Company::pluck('id', 'name')->toArray()
             : [];
 
-        // Pre-fetch links into key "applicantId_batchId"
         $existingLinks = ApplicantBatch::withTrashed()
             ->select('id', 'applicant_id', 'batch_id')
             ->get()
@@ -60,104 +82,178 @@ class LegacyApplicantsSeeder extends Seeder
         $skipped        = 0;
         $linked         = 0;
         $batchesCreated = 0;
+        $passportsFound = 0;
+
+        $headerMap = [];
 
         DB::disableQueryLog();
 
-        // -------------------------------------------------------------
-        // 🚀 OPTIMIZATION 2: Disable Spatie activity logging temporarily
-        // -------------------------------------------------------------
         if (function_exists('activity')) {
             activity()->disableLogging();
         }
 
-        $this->command?->info("⚡ Starting high-speed processing...");
+        $this->command?->info('⚡ Starting high-speed processing...');
 
         try {
             DB::beginTransaction();
 
-            while (($rawLine = fgets($file)) !== false) {
+            // Use fgetcsv to properly handle multi-line cells and quotes
+            while (($cols = fgetcsv($file)) !== false) {
                 $rowNum++;
 
+                // Skip completely empty lines
+                if ($cols === [null] || empty(array_filter($cols, fn($v) => trim((string)$v) !== ''))) {
+                    continue;
+                }
+
+                // Clean all column strings
+                $cols = array_map(fn ($v) => trim((string) $v), $cols);
+
+                // Row 2 = actual headers
+                if ($rowNum === 2) {
+                    foreach ($cols as $idx => $headerName) {
+                        $cleanHeader = strtoupper(trim(preg_replace('/\s+/', ' ', (string) $headerName)));
+                        $cleanHeader = str_replace(["\n", "\r"], ' ', $cleanHeader);
+                        if ($cleanHeader !== '') {
+                            $headerMap[$cleanHeader] = $idx;
+                        }
+                    }
+                    continue;
+                }
+
+                // Skip instruction/formula rows
                 if ($rowNum <= 3) {
                     continue;
                 }
 
-                $cleanLine = trim($rawLine);
-                if ($cleanLine === '') {
-                    continue;
+                $get = function (array $keywords) use ($cols, $headerMap) {
+                    foreach ($keywords as $keyword) {
+                        $keyword = strtoupper(trim($keyword));
+                        foreach ($headerMap as $header => $idx) {
+                            if (str_contains($header, $keyword) && array_key_exists($idx, $cols)) {
+                                $val = trim((string) $cols[$idx]);
+                                if ($val !== '') {
+                                    return $val;
+                                }
+                            }
+                        }
+                    }
+                    return null;
+                };
+
+                // T-Number
+                $tNumber = strtoupper(trim((string) ($get(['T-NUMBER', 'TRICASTLE']) ?? '')));
+                if ($tNumber === '' || ! preg_match('/^[TMG]\d{5}$/i', $tNumber)) {
+                    foreach ($cols as $cVal) {
+                        $v = strtoupper(trim((string) $cVal));
+                        if (preg_match('/^[TMG]\d{5}$/i', $v)) {
+                            $tNumber = $v;
+                            break;
+                        }
+                    }
                 }
 
-                $sanitizedLine = preg_replace('/(?<!^)(?<!,)"(?!,)(?!$)/', '', $cleanLine);
-                $cols          = str_getcsv($sanitizedLine, ',');
-
-                $tNumber = '';
-                $shift   = 0;
-
-                $col0 = trim($cols[0] ?? '');
-                $col1 = trim($cols[1] ?? '');
-
-                if (preg_match('/^[A-Z0-9]{5,8}$/i', $col1) && ! str_contains(strtoupper($col1), 'NUMBER')) {
-                    $tNumber = strtoupper($col1);
-                    $shift   = 1;
-                } elseif (preg_match('/^[A-Z0-9]{5,8}$/i', $col0) && ! str_contains(strtoupper($col0), 'NUMBER')) {
-                    $tNumber = strtoupper($col0);
-                    $shift   = 0;
-                }
-
-                if (empty($tNumber) || str_contains($tNumber, 'TRICASTLE') || str_contains($tNumber, 'T-NUMBER') || str_contains($tNumber, 'UNDECIDED')) {
+                if (
+                    $tNumber === '' ||
+                    str_contains($tNumber, 'TRICASTLE') ||
+                    str_contains($tNumber, 'T-NUMBER') ||
+                    str_contains($tNumber, 'UNDECIDED')
+                ) {
                     $skipped++;
                     continue;
                 }
 
-                $rawName = trim($cols[$shift + 1] ?? '');
-                if (empty($rawName) || $rawName === $tNumber) {
-                    $rawName = trim($cols[$shift + 4] ?? $cols[$shift + 3] ?? $cols[$shift + 2] ?? '');
+                // Name
+                $rawName = trim((string) ($get(['NAME']) ?? ''));
+                if ($rawName === '' || $rawName === $tNumber) {
+                    foreach ($cols as $cVal) {
+                        $v = trim((string) $cVal);
+                        if ($v === '' || strtoupper($v) === $tNumber || is_numeric($v)) {
+                            continue;
+                        }
+                        $up = strtoupper($v);
+                        if (str_contains($up, 'UNDECIDED') || str_contains($up, 'STAFF') || str_contains($up, 'FUNCTION')) {
+                            continue;
+                        }
+                        if (preg_match('/^[A-Za-z0-9\s,.\'\-]+$/u', $v) && strlen($v) >= 3) {
+                            $rawName = $v;
+                            break;
+                        }
+                    }
                 }
 
-                if (empty($rawName) || $rawName === $tNumber || str_contains(strtoupper($rawName), 'UNDECIDED')) {
+                if ($rawName === '' || str_contains(strtoupper($rawName), 'UNDECIDED')) {
                     $skipped++;
                     continue;
                 }
 
                 [$lastName, $firstName, $middleName] = $this->splitName($rawName);
 
-                $dob            = $this->parseDate($cols[$shift + 7] ?? null);
-                $gender         = $this->mapGender($cols[$shift + 8] ?? null);
-                $firstBatchStr  = trim($cols[$shift + 9] ?? '');
-                $latestBatchStr = trim($cols[$shift + 10] ?? '');
+                $dob            = $this->parseDate($get(['DATE OF BIRTH', 'BIRTHDAY', 'BIRTH']));
+                $gender         = $this->mapGender($get(['GENDER', 'SEX']));
+                $firstBatchStr  = (string) ($get(['FIRST BATCH']) ?? '');
+                $latestBatchStr = (string) ($get(['LATEST BATCH']) ?? '');
+                $companyName    = (string) ($get(['LATEST COMPANY', 'COMPANY NUMBER', 'COMPANY']) ?? '');
 
-                if ($firstBatchStr === '' && $latestBatchStr === '') {
-                    for ($i = 8; $i <= 12; $i++) {
-                        $candidate = trim($cols[$shift + $i] ?? '');
-                        if (preg_match('/batch\s*#?\d+/i', $candidate) || preg_match('/^\d{1,3}$/', $candidate)) {
-                            $latestBatchStr = $candidate;
-                            break;
+                // ✅ PASSPORT NUMBER
+                $passportNo = $this->cleanPassport($get(['PASSPORT NUMBER', 'PASSPORT NO', 'PASSPORT']));
+
+                // ✅ PASSPORT EXPIRY
+                $passportExpiry = $this->parseDate($get(['DATE OF EXPIRATION', 'PASSPORT EXPIRY', 'EXPIRATION', 'EXPIRY']));
+
+                // Fallback: find passport anywhere, then take nearby expiry date
+                if (! $passportNo || ! $passportExpiry) {
+                    foreach ($cols as $idx => $cVal) {
+                        $candidate = $this->cleanPassport($cVal);
+                        if (! $candidate) {
+                            continue;
                         }
+
+                        if (! $passportNo) {
+                            $passportNo = $candidate;
+                        }
+
+                        if (! $passportExpiry) {
+                            for ($j = 1; $j <= 2; $j++) {
+                                if (! isset($cols[$idx + $j])) {
+                                    continue;
+                                }
+                                $maybeExpiry = $this->parseDate($cols[$idx + $j]);
+                                if ($maybeExpiry) {
+                                    $passportExpiry = $maybeExpiry;
+                                    break;
+                                }
+                            }
+                        }
+                        break;
                     }
                 }
 
-                $companyName    = trim($cols[$shift + 12] ?? $cols[$shift + 11] ?? '');
-                $passportNo     = trim($cols[$shift + 30] ?? '') ?: null;
-                $passportExpiry = $this->parseDate($cols[$shift + 31] ?? null);
+                if ($passportNo) {
+                    $passportsFound++;
+                }
 
-                $empYear        = trim($cols[$shift + 32] ?? '');
-                $empMonth       = trim($cols[$shift + 33] ?? '');
-                $flightHist     = trim($cols[$shift + 19] ?? '');
-
+                $empYear    = (string) ($get(['EMPLOYMENT YEAR']) ?? '');
+                $empMonth   = (string) ($get(['EMPLOYMENT MONTH']) ?? '');
+                $flightHist = (string) ($get(['FLIGHT']) ?? '');
                 $realDeployedAt = $this->parseRealDeploymentDate($empYear, $empMonth, $flightHist);
 
-                $address     = trim($cols[$shift + 35] ?? '') ?: null;
-                $height      = $this->toHeight($cols[$shift + 36] ?? null);
-                $weight      = $this->toWeight($cols[$shift + 37] ?? null);
-                $civilStatus = $this->mapCivilStatus($cols[$shift + 38] ?? null);
-                $children    = $this->toChildrenCount($cols[$shift + 39] ?? null);
-                $religion    = trim($cols[$shift + 40] ?? '') ?: null;
-                $hand        = $this->mapDominantHand($cols[$shift + 41] ?? null);
-                $salary      = $this->toSalary($cols[$shift + 44] ?? null);
-                $examScore   = $this->toScore($cols[$shift + 46] ?? null);
-                $englishPct  = $this->toScore($cols[$shift + 47] ?? null);
+                $address     = $get(['CURRENT ADDRESS', 'HOME TOWN', 'PLACE OF BIRTH']);
+                $height      = $this->toHeight($get(['HEIGHT']));
+                $weight      = $this->toWeight($get(['WEIGHT']));
+                $civilStatus = $this->mapCivilStatus($get(['CIVIL STATUS', 'MARITAL STATUS']));
+                $children    = $this->toChildrenCount($get(['NUMBER OF CHILDREN', 'CHILDREN']));
+                $religion    = $get(['RELIGION']);
+                $hand        = $this->mapDominantHand($get(['DOMINANT HAND', 'HAND']));
+                $salary      = $this->toSalary($get(['CURRENT SALARY', 'SALARY']));
+                $examScore   = $this->toScore($get(['EXAM RESULT', 'EXAM']));
+                $englishPct  = $this->toScore($get(['ENGLISH']));
 
-                $isStaffMember = $this->isStaff($latestBatchStr) || $this->isStaff($firstBatchStr);
+                if ($religion && is_numeric($religion)) {
+                    $religion = null;
+                }
+
+                $isStaffMember = $this->isStaff($latestBatchStr) || $this->isStaff($firstBatchStr) || $this->isStaff(implode(' ', $cols));
                 $status        = $isStaffMember ? ApplicantStatus::Verified : ApplicantStatus::FinalList;
 
                 $payload = [
@@ -188,24 +284,30 @@ class LegacyApplicantsSeeder extends Seeder
                     'deleted_at'              => null,
                 ];
 
-                // Check in Memory HashMap instead of sending a SELECT query
+                if (Schema::hasColumn('applicants', 'passport_issue_date')) {
+                    $payload['passport_issue_date'] = null;
+                }
+                if (Schema::hasColumn('applicants', 'passport_issue_place')) {
+                    $payload['passport_issue_place'] = null;
+                }
+
                 if (isset($existingApplicants[$tNumber])) {
                     $applicantId = $existingApplicants[$tNumber];
                     Applicant::where('id', $applicantId)->update($payload);
                     $updated++;
                 } else {
-                    $applicant   = Applicant::create($payload);
+                    $applicant = Applicant::create($payload);
                     $applicantId = $applicant->id;
                     $existingApplicants[$tNumber] = $applicantId;
                     $imported++;
                 }
 
-                // Company Check
+                // Company
                 if ($companyName !== '' && ! isset($existingCompanies[$companyName]) && class_exists(Company::class) && Schema::hasTable('companies')) {
                     try {
                         $compCode = 'COMP-' . strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $companyName));
                         if (strlen($compCode) < 6) {
-                            $compCode = 'COMP-' . sprintf('%04d', (int) preg_replace('/\D/', '', $companyName) ?: rand(1000, 9999));
+                            $compCode = 'COMP-' . sprintf('%04d', random_int(1000, 9999));
                         }
 
                         $comp = Company::create([
@@ -215,11 +317,11 @@ class LegacyApplicantsSeeder extends Seeder
                         ]);
                         $existingCompanies[$companyName] = $comp->id;
                     } catch (\Throwable $e) {
-                        // Suppress
+                        // ignore
                     }
                 }
 
-                // Batch Check
+                // Batches
                 $extractedLatest = $this->extractBatchNumber($latestBatchStr);
                 $extractedFirst  = $this->extractBatchNumber($firstBatchStr);
 
@@ -253,7 +355,6 @@ class LegacyApplicantsSeeder extends Seeder
                             $batchesCreated++;
                         }
 
-                        // Link Check
                         $linkKey = "{$applicantId}_{$batchId}";
                         if (! isset($existingLinks[$linkKey])) {
                             ApplicantBatch::create([
@@ -272,27 +373,30 @@ class LegacyApplicantsSeeder extends Seeder
                 }
 
                 if ($rowNum % 500 === 0) {
-                    $this->command?->info("...processed {$rowNum} rows (Applicants: {$imported}, Batches: {$batchesCreated})");
+                    $this->command?->info("...processed {$rowNum} rows (Imported: {$imported}, Updated: {$updated}, Passports: {$passportsFound})");
                 }
             }
 
             DB::commit();
             fclose($file);
+            @unlink($tmpPath);
 
             if (function_exists('activity')) {
                 activity()->enableLogging();
             }
 
-            $this->command?->info("✅ Seeder completed successfully!");
+            $this->command?->info('✅ Seeder completed successfully!');
             $this->command?->table(
-                ['Total CSV Lines', 'Created', 'Updated', 'Skipped', 'Batches Created', 'Links Created'],
-                [[$rowNum, $imported, $updated, $skipped, $batchesCreated, $linked]]
+                ['Total CSV Lines', 'Created', 'Updated', 'Skipped', 'Passports Found', 'Batches Created', 'Links Created'],
+                [[$rowNum, $imported, $updated, $skipped, $passportsFound, $batchesCreated, $linked]]
             );
-
         } catch (\Throwable $e) {
             DB::rollBack();
             if (isset($file) && is_resource($file)) {
                 fclose($file);
+            }
+            if (isset($tmpPath)) {
+                @unlink($tmpPath);
             }
             if (function_exists('activity')) {
                 activity()->enableLogging();
@@ -305,6 +409,24 @@ class LegacyApplicantsSeeder extends Seeder
 
             throw $e;
         }
+    }
+
+    private function cleanPassport(mixed $value): ?string
+    {
+        $value = strtoupper(trim((string) $value));
+        if ($value === '') {
+            return null;
+        }
+
+        if (in_array($value, ['SINGLE', 'MARRIED', 'WIDOWED', 'DIVORCED', 'SEPARATED', 'STAFF', 'NONE', 'N/A', 'MALE', 'FEMALE'], true)) {
+            return null;
+        }
+
+        if (preg_match('/^(?:[A-Z]{1,2}\d{6,8}[A-Z0-9]?|[A-Z]\d{3}[A-Z]\d{4})$/', $value)) {
+            return $value;
+        }
+
+        return null;
     }
 
     private function resolveBatchStatus(string $desired = 'ongoing'): mixed
@@ -327,12 +449,12 @@ class LegacyApplicantsSeeder extends Seeder
         }
 
         $upper = strtoupper($batchStr);
-        if (in_array($upper, ['UNDECIDED', 'PENDING', 'NONE', 'N/A', 'NO BATCH', 'CANCELLED', 'REJECTED'])) {
+        if (in_array($upper, ['UNDECIDED', 'PENDING', 'NONE', 'N/A', 'NO BATCH', 'CANCELLED', 'REJECTED'], true)) {
             return null;
         }
 
         if (preg_match('/(\d+)/', $batchStr, $m)) {
-            return (string) (int) $m[1];
+            return (string) ((int) $m[1]);
         }
 
         return null;
@@ -362,17 +484,17 @@ class LegacyApplicantsSeeder extends Seeder
 
         if (str_contains($fullName, ',')) {
             [$last, $rest] = explode(',', $fullName, 2);
-            $last  = trim($last);
+            $last = trim($last);
             $parts = preg_split('/\s+/', trim($rest)) ?: [];
-            $first  = array_shift($parts) ?? '';
+            $first = array_shift($parts) ?? '';
             $middle = implode(' ', $parts);
 
             return [$last, $first, $middle];
         }
 
-        $parts  = preg_split('/\s+/', $fullName) ?: [];
-        $last   = array_shift($parts) ?? '';
-        $first  = array_shift($parts) ?? '';
+        $parts = preg_split('/\s+/', $fullName) ?: [];
+        $last = array_shift($parts) ?? '';
+        $first = array_shift($parts) ?? '';
         $middle = implode(' ', $parts);
 
         return [$last, $first, $middle];
@@ -383,6 +505,14 @@ class LegacyApplicantsSeeder extends Seeder
         $value = trim((string) $value);
         if ($value === '' || str_contains($value, '#')) {
             return null;
+        }
+
+        if (is_numeric($value) && (int) $value > 10000 && (int) $value < 60000) {
+            try {
+                return Carbon::create(1899, 12, 30)->addDays((int) $value)->format('Y-m-d');
+            } catch (\Throwable) {
+                return null;
+            }
         }
 
         try {
@@ -397,8 +527,8 @@ class LegacyApplicantsSeeder extends Seeder
         $v = strtoupper(trim((string) $value));
 
         return match ($v) {
-            'M', 'MALE' => 'male',
-            'F', 'FEMALE' => 'female',
+            'M', 'MALE', 'Ｍ' => 'male',
+            'F', 'FEMALE', 'Ｆ' => 'female',
             default => null,
         };
     }
@@ -409,10 +539,10 @@ class LegacyApplicantsSeeder extends Seeder
 
         return match (true) {
             str_contains($v, 'married') => 'married',
-            str_contains($v, 'widow')   => 'widowed',
+            str_contains($v, 'widow') => 'widowed',
             str_contains($v, 'separat') => 'separated',
-            str_contains($v, 'divor')   => 'divorced',
-            default                     => 'single',
+            str_contains($v, 'divor') => 'divorced',
+            default => 'single',
         };
     }
 
@@ -423,7 +553,7 @@ class LegacyApplicantsSeeder extends Seeder
         return match (true) {
             str_contains($v, 'left') => 'left',
             str_contains($v, 'right') => 'right',
-            str_contains($v, 'both') || str_contains($v, 'ambi') => 'both',
+            str_contains($v, 'both'), str_contains($v, 'ambi') => 'both',
             default => null,
         };
     }

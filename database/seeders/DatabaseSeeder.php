@@ -23,6 +23,9 @@ class DatabaseSeeder extends Seeder
             DocumentTypeSeeder::class,
             ThemeSettingsSeeder::class,
             LegacyApplicantsSeeder::class,
+            LegacyCompanyApplicantSeeder::class,
+            PassportIssuingOfficeSeeder::class
+
 
         ]);
 

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ApplicantStatus;
+use App\Enums\CivilStatus;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -56,6 +57,7 @@ class Applicant extends Model
         // ── Passport / IDs ────────────────────────────────────────────────
         'passport_number',
         'passport_expiry',
+        'passport_issuing_office_id', // Linked Relation
         'sss_number',
         'tin_number',
         'philhealth_number',
@@ -122,10 +124,6 @@ class Applicant extends Model
         'created_by',
     ];
 
-    /**
-     * ⚡ OPTIMIZED: Removed automatic loading of deep profile relations (Lifestyle, Tattoos, Educations, Employments).
-     * This makes list queries and pagination extremely fast.
-     */
     protected $with = [];
 
     protected $casts = [
@@ -156,6 +154,7 @@ class Applicant extends Model
 
         // ── Enum ──────────────────────────────────────────────────────────
         'status' => ApplicantStatus::class,
+        'civil_status' => CivilStatus::class,
     ];
 
     protected $appends = ['full_name', 'age', 'photo_url'];
@@ -168,37 +167,16 @@ class Applicant extends Model
     {
         return LogOptions::defaults()
             ->logOnly([
-                // Personal
                 'first_name',
                 'middle_name',
                 'last_name',
                 'suffix',
                 'email',
-                'phone',
-                'mobile',
-
-                // Status
                 'status',
+                'passport_number',
+                'passport_issuing_office_id',
                 'rejection_reason',
-                'final_listed_at',
-                'rejected_at',
-
-                // Quality
-                'quality_score',
-                'quality_grade',
-
-                // Staff
                 'assigned_staff_id',
-
-                // Phase 1 — log deployment-relevant changes
-                'skill_category',
-                'understands_basic_english',
-                'jlpt_level',
-                'willing_to_be_deployed',
-                'japan_deployment_ready',
-                'previous_japan_experience',
-                'has_titp_certificate',
-                'ssw_eligible',
             ])
             ->logOnlyDirty()
             ->dontLogEmptyChanges()
@@ -206,23 +184,6 @@ class Applicant extends Model
             ->setDescriptionForEvent(function (string $event) {
                 $code = $this->applicant_code ?? 'unknown';
                 $name = trim("{$this->first_name} {$this->last_name}");
-
-                if ($event === 'updated' && $this->isDirty('status')) {
-                    $newStatus = $this->status?->value ?? $this->status;
-
-                    return match ($newStatus) {
-                        'final_list' => "Moved {$code} ({$name}) to Final List",
-                        'rejected'   => "Rejected {$code} ({$name})",
-                        'verified'   => "Verified {$code} ({$name})",
-                        default      => "Changed {$code} status to {$newStatus}",
-                    };
-                }
-
-                if ($event === 'updated' && $this->isDirty('japan_deployment_ready')) {
-                    $flag = $this->japan_deployment_ready ? 'Ready' : 'Not Ready';
-                    return "Marked {$code} ({$name}) as Japan Deployment: {$flag}";
-                }
-
                 return match ($event) {
                     'created' => "Created applicant {$code} ({$name})",
                     'updated' => "Updated applicant {$code}",
@@ -232,17 +193,12 @@ class Applicant extends Model
             });
     }
 
-    // ═══════════════════════════════════════════════════════
-    // Boot
-    // ═══════════════════════════════════════════════════════
-
     protected static function booted(): void
     {
         static::creating(function (Applicant $applicant) {
             if (empty($applicant->applicant_code)) {
                 $applicant->applicant_code = static::generateUniqueCode();
             }
-
             $applicant->status ??= ApplicantStatus::Pending;
         });
     }
@@ -273,10 +229,6 @@ class Applicant extends Model
         return $code;
     }
 
-    // ═══════════════════════════════════════════════════════
-    // Accessors
-    // ═══════════════════════════════════════════════════════
-
     protected function fullName(): Attribute
     {
         return Attribute::make(
@@ -300,7 +252,6 @@ class Applicant extends Model
     {
         return Attribute::make(
             get: function () {
-                // Find current document under ID_PHOTO document type
                 $idPhotoDoc = $this->currentDocuments
                     ?->first(fn($doc) => $doc->documentType?->code === 'ID_PHOTO');
 
@@ -317,16 +268,14 @@ class Applicant extends Model
     // Relationships
     // ═══════════════════════════════════════════════════════
 
-    public function internships(): HasMany
+    public function passportOffice(): BelongsTo
     {
-        return $this->hasMany(ApplicantInternship::class)->latest();
+        return $this->belongsTo(PassportIssuingOffice::class, 'passport_issuing_office_id');
     }
 
-    public function currentInternship(): HasOne
-    {
-        return $this->hasOne(ApplicantInternship::class)->where('is_current', true);
-    }
-
+    /**
+     * 🎯 ADDED: Guarantors Relationship (Fixes 500 error on guarantors/sync)
+     */
     public function guarantors(): HasMany
     {
         return $this->hasMany(ApplicantGuarantor::class)->orderBy('sequence');
@@ -377,12 +326,6 @@ class Applicant extends Model
         return $this->hasMany(ApplicantEmployment::class);
     }
 
-    public function currentEmployment(): HasOne
-    {
-        return $this->hasOne(ApplicantEmployment::class)
-            ->where('is_current', true);
-    }
-
     public function documents(): HasMany
     {
         return $this->hasMany(ApplicantDocument::class);
@@ -406,112 +349,9 @@ class Applicant extends Model
                 'id',
                 'status',
                 'assigned_at',
-                'interview_date',
-                'medical_date',
-                'exam_date',
-                'accepted_at',
-                'deployed_at',
-                'exam_score',
-                'interview_notes',
-                'medical_notes',
-                'rejection_reason',
-                'remarks',
                 'processed_by',
             ])
             ->withTimestamps()
             ->using(ApplicantBatch::class);
-    }
-
-    // ═══════════════════════════════════════════════════════
-    // Scopes
-    // ═══════════════════════════════════════════════════════
-
-    public function scopePending($query)
-    {
-        return $query->where('status', ApplicantStatus::Pending);
-    }
-
-    public function scopeUnderReview($query)
-    {
-        return $query->where('status', ApplicantStatus::UnderReview);
-    }
-
-    public function scopeVerified($query)
-    {
-        return $query->where('status', ApplicantStatus::Verified);
-    }
-
-    public function scopeFinalList($query)
-    {
-        return $query->where('status', ApplicantStatus::FinalList);
-    }
-
-    public function scopeRejected($query)
-    {
-        return $query->where('status', ApplicantStatus::Rejected);
-    }
-
-    public function scopeByStaff($query, int $staffId)
-    {
-        return $query->where('assigned_staff_id', $staffId);
-    }
-
-    public function scopeWillingToBeDeployed($query)
-    {
-        return $query->where('willing_to_be_deployed', true);
-    }
-
-    public function scopeJapanReady($query)
-    {
-        return $query->where('japan_deployment_ready', true);
-    }
-
-    public function scopeBySkill($query, string $skillCategory)
-    {
-        return $query->where('skill_category', $skillCategory);
-    }
-
-    public function scopeByJlptLevel($query, string $level)
-    {
-        return $query->where('jlpt_level', $level);
-    }
-
-    public function scopeSswEligible($query)
-    {
-        return $query->where('ssw_eligible', true);
-    }
-
-    public function scopeWithJapanExperience($query)
-    {
-        return $query->where('previous_japan_experience', true);
-    }
-
-    // ═══════════════════════════════════════════════════════
-    // Helpers
-    // ═══════════════════════════════════════════════════════
-
-    public function isFinalList(): bool
-    {
-        return $this->status === ApplicantStatus::FinalList;
-    }
-
-    public function isRejected(): bool
-    {
-        return $this->status === ApplicantStatus::Rejected;
-    }
-
-    public function canBeAssignedToBatch(): bool
-    {
-        return $this->status === ApplicantStatus::FinalList;
-    }
-
-    public function isJapanDeploymentReady(): bool
-    {
-        return $this->japan_deployment_ready === true;
-    }
-
-    public function hasJapanExperience(): bool
-    {
-        return $this->previous_japan_experience === true;
     }
 }

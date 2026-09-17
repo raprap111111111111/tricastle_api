@@ -6,6 +6,7 @@ use App\Domain\Applicant\DTOs\CreateApplicantDTO;
 use App\Domain\Applicant\DTOs\UpdateApplicantDTO;
 use App\Domain\Applicant\DTOs\UpdateStatusDTO;
 use App\Enums\ApplicantStatus;
+use App\Enums\CivilStatus;
 use App\Http\Requests\v1\Applicant\RejectApplicantRequest;
 use App\Http\Requests\v1\Applicant\StoreApplicantRequest;
 use App\Http\Requests\v1\Applicant\UpdateApplicantRequest;
@@ -15,6 +16,8 @@ class ApplicantMapper
 {
     public static function fromCreateRequest(StoreApplicantRequest $request): CreateApplicantDTO
     {
+        $civilStatusInput = $request->validated('civil_status');
+
         return new CreateApplicantDTO(
             // ── Personal ──────────────────────────────────────────────────
             firstName:        $request->validated('first_name'),
@@ -26,11 +29,11 @@ class ApplicantMapper
             mobile:           $request->validated('mobile'),
             dateOfBirth:      $request->validated('date_of_birth'),
             gender:           $request->validated('gender'),
-            civilStatus:      $request->validated('civil_status'),
+            civilStatus:      $civilStatusInput ? CivilStatus::tryFrom($civilStatusInput) : null,
             numberOfChildren: $request->validated('number_of_children') ?? 0,
             nationality:      $request->validated('nationality') ?? 'Filipino',
 
-            // ── AIS / Trade Test (NEW) ────────────────────────────────────
+            // ── AIS / Trade Test ──────────────────────────────────────────
             appliedPosition:       $request->validated('applied_position'),
             tradeTestTry:          $request->validated('trade_test_try'),
             tradeTestDate:         $request->validated('trade_test_date'),
@@ -52,12 +55,13 @@ class ApplicantMapper
             postalCode:       $request->validated('postal_code'),
 
             // ── Passport / IDs ────────────────────────────────────────────
-            passportNumber:   $request->validated('passport_number'),
-            passportExpiry:   $request->validated('passport_expiry'),
-            sssNumber:        $request->validated('sss_number'),
-            tinNumber:        $request->validated('tin_number'),
-            philhealthNumber: $request->validated('philhealth_number'),
-            pagibigNumber:    $request->validated('pagibig_number'),
+            passportNumber:          $request->validated('passport_number'),
+            passportExpiry:          $request->validated('passport_expiry'),
+            passportIssuingOfficeId: $request->validated('passport_issuing_office_id'), // Collected from form input
+            sssNumber:               $request->validated('sss_number'),
+            tinNumber:               $request->validated('tin_number'),
+            philhealthNumber:        $request->validated('philhealth_number'),
+            pagibigNumber:           $request->validated('pagibig_number'),
 
             // ── Skill / Trade ─────────────────────────────────────────────
             skillCategory:           $request->validated('skill_category'),
@@ -117,6 +121,8 @@ class ApplicantMapper
 
     public static function fromUpdateRequest(UpdateApplicantRequest $request): UpdateApplicantDTO
     {
+        $civilStatusInput = $request->validated('civil_status');
+
         return new UpdateApplicantDTO(
             // ── Personal ──────────────────────────────────────────────────
             firstName:        $request->validated('first_name'),
@@ -128,11 +134,11 @@ class ApplicantMapper
             mobile:           $request->validated('mobile'),
             dateOfBirth:      $request->validated('date_of_birth'),
             gender:           $request->validated('gender'),
-            civilStatus:      $request->validated('civil_status'),
+            civilStatus:      $civilStatusInput ? CivilStatus::tryFrom($civilStatusInput) : null,
             numberOfChildren: $request->validated('number_of_children'),
             nationality:      $request->validated('nationality'),
 
-            // ── AIS / Trade Test (NEW) ────────────────────────────────────
+            // ── AIS / Trade Test ──────────────────────────────────────────
             appliedPosition:       $request->validated('applied_position'),
             tradeTestTry:          $request->validated('trade_test_try'),
             tradeTestDate:         $request->validated('trade_test_date'),
@@ -156,12 +162,13 @@ class ApplicantMapper
             postalCode:       $request->validated('postal_code'),
 
             // ── Passport / IDs ────────────────────────────────────────────
-            passportNumber:   $request->validated('passport_number'),
-            passportExpiry:   $request->validated('passport_expiry'),
-            sssNumber:        $request->validated('sss_number'),
-            tinNumber:        $request->validated('tin_number'),
-            philhealthNumber: $request->validated('philhealth_number'),
-            pagibigNumber:    $request->validated('pagibig_number'),
+            passportNumber:          $request->validated('passport_number'),
+            passportExpiry:          $request->validated('passport_expiry'),
+            passportIssuingOfficeId: $request->validated('passport_issuing_office_id'), // Track changes during update
+            sssNumber:               $request->validated('sss_number'),
+            tinNumber:               $request->validated('tin_number'),
+            philhealthNumber:        $request->validated('philhealth_number'),
+            pagibigNumber:           $request->validated('pagibig_number'),
 
             // ── Skill / Trade ─────────────────────────────────────────────
             skillCategory:           $request->validated('skill_category'),

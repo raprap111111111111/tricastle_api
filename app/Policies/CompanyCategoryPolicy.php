@@ -5,7 +5,7 @@ namespace App\Policies;
 use App\Models\Applicant;
 use App\Models\User;
 
-class ApplicantPolicy
+class CompanyCategoryPolicy
 {
     /**
      * Perform pre-authorization checks.

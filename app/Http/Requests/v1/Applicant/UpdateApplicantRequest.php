@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\v1\Applicant;
 
+use App\Enums\CivilStatus;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -32,13 +33,7 @@ class UpdateApplicantRequest extends FormRequest
             'date_of_birth'      => ['sometimes', 'nullable', 'date', 'before:today'],
             'birthplace'         => ['sometimes', 'nullable', 'string', 'max:150'],
             'gender'             => ['sometimes', 'nullable', Rule::in(['male', 'female'])],
-            'civil_status'       => ['sometimes', 'nullable', Rule::in([
-                'single',
-                'married',
-                'widowed',
-                'separated',
-                'divorced',
-            ])],
+            'civil_status'       => ['sometimes', 'nullable', Rule::enum(CivilStatus::class)],
             'religion'           => ['sometimes', 'nullable', 'string', 'max:100'],
             'number_of_children' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:20'],
             'nationality'        => ['sometimes', 'nullable', 'string', 'max:60'],

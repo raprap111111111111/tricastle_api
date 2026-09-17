@@ -1,7 +1,9 @@
 <?php
 
-namespace App\Http\Controllers;
 
+namespace App\Http\Controllers\v1;
+
+use App\Http\Controllers\Controller;
 use App\Models\ApplicantInternship;
 use Carbon\Carbon;
 use Illuminate\Support\Str;

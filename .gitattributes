@@ -9,3 +9,9 @@
 /.github export-ignore
 CHANGELOG.md export-ignore
 .styleci.yml export-ignore
+
+# Normalize text files to LF in the repo
+* text=auto
+
+# Keep CSV data files exactly as-is (no conversion)
+*.csv -text

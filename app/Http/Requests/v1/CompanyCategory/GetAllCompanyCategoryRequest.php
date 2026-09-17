@@ -19,11 +19,30 @@ class GetAllCompanyCategoryRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        $this->merge([
+        $merge = [
             'order_by'  => $this->getValidOrderBy(),
             'order_dir' => $this->getValidOrderDir(),
             'limit'     => $this->getValidLimit(),
-        ]);
+        ];
+
+        // 🎯 Convert boolean query string flags safely
+        if ($this->has('is_active')) {
+            $merge['is_active'] = filter_var($this->input('is_active'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        }
+
+        if ($this->has('today')) {
+            $merge['today'] = filter_var($this->input('today'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        }
+
+        if ($this->has('this_week')) {
+            $merge['this_week'] = filter_var($this->input('this_week'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        }
+
+        if ($this->has('this_month')) {
+            $merge['this_month'] = filter_var($this->input('this_month'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        }
+
+        $this->merge($merge);
     }
 
     public function rules(): array

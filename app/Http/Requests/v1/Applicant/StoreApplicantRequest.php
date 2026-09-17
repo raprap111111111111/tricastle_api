@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\v1\Applicant;
 
+use App\Enums\CivilStatus;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -26,9 +27,7 @@ class StoreApplicantRequest extends FormRequest
             'date_of_birth'      => ['nullable', 'date', 'before:today'],
             'birthplace'         => ['nullable', 'string', 'max:150'],
             'gender'             => ['nullable', Rule::in(['male', 'female'])],
-            'civil_status'       => ['nullable', Rule::in([
-                'single', 'married', 'widowed', 'separated', 'divorced',
-            ])],
+            'civil_status'       => ['nullable', Rule::enum(CivilStatus::class)], // Validate Enum Including LiveInPartner
             'religion'           => ['nullable', 'string', 'max:100'],
             'number_of_children' => ['nullable', 'integer', 'min:0', 'max:20'],
             'nationality'        => ['nullable', 'string', 'max:60'],
@@ -53,38 +52,35 @@ class StoreApplicantRequest extends FormRequest
             'postal_code'       => ['nullable', 'string', 'max:20'],
 
             // ── Passport / IDs ────────────────────────────────────────────
-            'passport_number'  => ['nullable', 'string', 'max:50'],
-            'passport_expiry'  => ['nullable', 'date', 'after:today'],
-            'sss_number'       => ['nullable', 'string', 'max:50'],
-            'tin_number'       => ['nullable', 'string', 'max:50'],
-            'philhealth_number'=> ['nullable', 'string', 'max:50'],
-            'pagibig_number'   => ['nullable', 'string', 'max:50'],
+            'passport_number'            => ['nullable', 'string', 'max:50'],
+            'passport_expiry'            => ['nullable', 'date', 'after:today'],
+            'passport_issuing_office_id' => ['nullable', 'integer', 'exists:passport_issuing_offices,id'], // Foreign Key Validated
+            'sss_number'                 => ['nullable', 'string', 'max:50'],
+            'tin_number'                 => ['nullable', 'string', 'max:50'],
+            'philhealth_number'          => ['nullable', 'string', 'max:50'],
+            'pagibig_number'             => ['nullable', 'string', 'max:50'],
 
-            // ── Skill / Trade (Phase 1) ───────────────────────────────────
-            'skill_category'     => ['nullable', Rule::in([
-                'skilled', 'semi_skilled', 'unskilled',
-            ])],
+            // ── Skill / Trade ─────────────────────────────────────────────
+            'skill_category'     => ['nullable', Rule::in(['skilled', 'semi_skilled', 'unskilled'])],
             'trade_or_occupation'=> ['nullable', 'string', 'max:100'],
 
-            // ── Language (Phase 1) ────────────────────────────────────────
+            // ── Language ──────────────────────────────────────────────────
             'understands_basic_english' => ['nullable', 'boolean'],
-            'jlpt_level'                => ['nullable', Rule::in([
-                'N5', 'N4', 'N3', 'N2', 'N1',
-            ])],
+            'jlpt_level'                => ['nullable', Rule::in(['N5', 'N4', 'N3', 'N2', 'N1'])],
 
-            // ── Japan Deployment (Phase 1) ────────────────────────────────
+            // ── Japan Deployment ──────────────────────────────────────────
             'willing_to_be_deployed'  => ['nullable', 'boolean'],
             'japan_deployment_ready'  => ['nullable', 'boolean'],
             'preferred_work_location' => ['nullable', 'string', 'max:100'],
 
-            // ── Japan Experience (Phase 1) ────────────────────────────────
+            // ── Japan Experience ──────────────────────────────────────────
             'previous_japan_experience' => ['nullable', 'boolean'],
             'years_japan_experience'    => [
                 'nullable', 'integer', 'min:0', 'max:50',
                 'required_if:previous_japan_experience,true',
             ],
 
-            // ── Certifications (Phase 1) ──────────────────────────────────
+            // ── Certifications ────────────────────────────────────────────
             'has_titp_certificate' => ['nullable', 'boolean'],
             'titp_occupation'      => [
                 'nullable', 'string', 'max:100',
@@ -92,13 +88,13 @@ class StoreApplicantRequest extends FormRequest
             ],
             'ssw_eligible' => ['nullable', 'boolean'],
 
-            // ── Salary (Phase 1) ──────────────────────────────────────────
+            // ── Salary ────────────────────────────────────────────────────
             'expected_salary'          => ['nullable', 'numeric', 'min:0'],
             'expected_salary_currency' => ['nullable', 'string', 'size:3'],
             'current_salary'           => ['nullable', 'numeric', 'min:0'],
             'current_salary_currency'  => ['nullable', 'string', 'size:3'],
 
-            // ── Family (Phase 1 + AIS) ────────────────────────────────────
+            // ── Family ────────────────────────────────────────────────────
             'father_name'        => ['nullable', 'string', 'max:150'],
             'father_occupation'  => ['nullable', 'string', 'max:100'],
             'father_contact'     => ['nullable', 'string', 'max:30'],
@@ -120,7 +116,7 @@ class StoreApplicantRequest extends FormRequest
             'japan_contacts.*.relation'          => ['nullable', 'string', 'max:100'],
             'japan_contacts.*.contact_number'    => ['nullable', 'string', 'max:30'],
 
-            // ── Emergency Contact (Phase 1) ───────────────────────────────
+            // ── Emergency Contact ─────────────────────────────────────────
             'emergency_contact_name'         => ['nullable', 'string', 'max:150'],
             'emergency_contact_relationship' => ['nullable', 'string', 'max:60'],
             'emergency_contact_phone'        => ['nullable', 'string', 'max:30'],

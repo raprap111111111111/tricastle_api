@@ -3,6 +3,7 @@
 namespace App\Domain\Internship\Services;
 
 use App\Domain\Internship\DTOs\GenerateMoaDTO;
+use App\Enums\CivilStatus;
 use App\Models\ApplicantDocument;
 use App\Models\ApplicantInternship;
 use App\Models\DocumentType;
@@ -10,6 +11,8 @@ use App\Models\InternshipDocument;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use BackedEnum;
+use UnitEnum;
 use PhpOffice\PhpWord\Settings;
 use PhpOffice\PhpWord\TemplateProcessor;
 use RuntimeException;
@@ -28,10 +31,23 @@ class MoaGeneratorService
         return $default === 'local' ? 'public' : $default;
     }
 
+    /**
+     * Safely clean and convert values to UTF-8 strings.
+     * Handles nulls, scalar values, and PHP 8.1+ Enums.
+     */
     private function clean(mixed $value): string
     {
         if ($value === null) {
             return '';
+        }
+
+        // 🎯 FIX: Convert Enum objects to string before string operations
+        if ($value instanceof CivilStatus) {
+            $value = $value->label();
+        } elseif ($value instanceof BackedEnum) {
+            $value = $value->value;
+        } elseif ($value instanceof UnitEnum) {
+            $value = $value->name;
         }
 
         $str = (string) $value;
@@ -214,6 +230,9 @@ class MoaGeneratorService
                 'DAY' => $this->clean($payload['agreement_day_ordinal'] ?? '____'),
                 'MONTH' => $this->clean($payload['agreement_month'] ?? '__________'),
                 'YEAR' => $this->clean($payload['agreement_year'] ?? '____'),
+                'DAY_S' => $this->clean($payload['agreement_day_ordinal'] ?? '____'),
+                'MONTH_S' => $this->clean($payload['agreement_month'] ?? '__________'),
+                'YEAR_S' => $this->clean($payload['agreement_year'] ?? '____'),
                 'CITY' => $this->clean($payload['municipality'] ?? 'Murcia'),
 
                 'I_NAME' => $this->clean($payload['intern']['full_name'] ?? '________________________'),
@@ -221,7 +240,7 @@ class MoaGeneratorService
                 'I_STAT' => $this->clean($payload['intern']['civil_status'] ?? 'Single'),
                 'I_ADDR' => $this->clean($payload['intern']['address'] ?? '________________________________________________'),
                 'I_PASSPORT' => $this->clean($payload['intern']['passport'] ?? '___________'),
-                'INTERN_PASS_ISSUED' => $this->clean($payload['intern']['passport_expiry'] ?? '__________________'),
+                'INTERN_PASS_ISSUED' => $this->clean($payload['intern']['passport_issued_info'] ?? '__________________'),
 
                 'G1_NAME' => $this->clean($payload['guarantor_1']['full_name'] ?: '________________________'),
                 'G1_AGE' => $this->clean($payload['guarantor_1']['age'] ?: '___'),
@@ -299,14 +318,14 @@ class MoaGeneratorService
             'snapshot' => $payload,
         ]);
 
-        // 🎯 NEW: Mirror document to applicant_documents for the Documents UI
+        // 🎯 Mirror document to applicant_documents for the Documents UI
         $this->syncToApplicantDocument($internship, $document, $dto->generatedBy);
 
         return $document;
     }
 
     /**
-     * 🎯 NEW: Helper to sync MOA into applicant_documents table
+     * Helper to sync MOA into applicant_documents table
      */
     private function syncToApplicantDocument(
         ApplicantInternship $internship,
@@ -412,7 +431,11 @@ class MoaGeneratorService
                 unset($data[$key]);
             }
             array_walk_recursive($data, function (&$v) {
-                if (is_string($v)) {
+                if ($v instanceof CivilStatus) {
+                    $v = $v->label();
+                } elseif ($v instanceof BackedEnum) {
+                    $v = $v->value;
+                } elseif (is_string($v)) {
                     $v = trim($v);
                 }
             });

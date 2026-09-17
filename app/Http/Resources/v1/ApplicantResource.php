@@ -9,10 +9,8 @@ class ApplicantResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        // 🎯 Detect if this request is for full profile detail view (e.g., GET /applicants/{id})
         $isDetailView = $request->routeIs('*.show') || $request->boolean('full_profile');
 
-        // 🎯 Find ID Photo document (Lightweight)
         $docs = $this->relationLoaded('currentDocuments')
             ? $this->currentDocuments
             : ($this->relationLoaded('documents') ? $this->documents : collect());
@@ -46,26 +44,31 @@ class ApplicantResource extends JsonResource
             'id'             => $this->id,
             'applicant_code' => $this->applicant_code,
 
-            // Applicant Column & Hover Preview
-            'first_name'       => $this->first_name,
-            'middle_name'      => $this->middle_name,
-            'last_name'        => $this->last_name,
-            'suffix'           => $this->suffix,
-            'full_name'        => $this->full_name,
-            'email'            => $this->email,
-            'applied_position' => $this->applied_position,
-            'age'              => $this->age,
-            'photo_url'        => $streamPhotoUrl ?? $legacyPhotoUrl,
+            'first_name'        => $this->first_name,
+            'middle_name'       => $this->middle_name,
+            'last_name'         => $this->last_name,
+            'suffix'            => $this->suffix,
+            'full_name'         => $this->full_name,
+            'email'             => $this->email,
+            'applied_position'  => $this->applied_position,
+            'age'               => $this->age,
+            'photo_url'         => $streamPhotoUrl ?? $legacyPhotoUrl,
             'profile_photo_url' => $streamPhotoUrl ?? $legacyPhotoUrl,
 
-            // Table Columns
             'nationality'     => $this->nationality,
             'status'          => $this->status,
             'quality_score'   => (float) $this->quality_score,
             'quality_grade'   => $this->quality_grade,
             'passport_expiry' => $this->passport_expiry?->format('Y-m-d'),
 
-            // Deployment Column & Deployments Popover
+            // Lightweight office relation object representation
+            'passport_office' => $this->relationLoaded('passportOffice') && $this->passportOffice ? [
+                'id'      => $this->passportOffice->id,
+                'region'  => $this->passportOffice->region,
+                'name'    => $this->passportOffice->name,
+                'address' => $this->passportOffice->address,
+            ] : null,
+
             'applicant_batches' => $this->whenLoaded(
                 'applicantBatches',
                 fn() => $this->applicantBatches->map(fn($ab) => [
@@ -112,7 +115,7 @@ class ApplicantResource extends JsonResource
                 'mobile'             => $this->mobile,
                 'date_of_birth'      => $this->date_of_birth?->format('Y-m-d'),
                 'gender'             => $this->gender,
-                'civil_status'       => $this->civil_status,
+                'civil_status'       => $this->civil_status?->value ?? $this->civil_status,
                 'number_of_children' => $this->number_of_children,
 
                 'height_cm'     => $this->height_cm ? (float) $this->height_cm : null,

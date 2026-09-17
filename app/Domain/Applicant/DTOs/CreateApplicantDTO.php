@@ -2,6 +2,8 @@
 
 namespace App\Domain\Applicant\DTOs;
 
+use App\Enums\CivilStatus;
+
 final readonly class CreateApplicantDTO
 {
     public function __construct(
@@ -11,17 +13,17 @@ final readonly class CreateApplicantDTO
         public string  $email,
 
         // ── Personal (optional) ───────────────────────────────────────────
-        public ?string $middleName        = null,
-        public ?string $suffix            = null,
-        public ?string $phone             = null,
-        public ?string $mobile            = null,
-        public ?string $dateOfBirth       = null,
-        public ?string $gender            = null,
-        public ?string $civilStatus       = null,
-        public ?int    $numberOfChildren  = 0,
-        public ?string $nationality       = 'Filipino',
+        public ?string                 $middleName        = null,
+        public ?string                 $suffix            = null,
+        public ?string                 $phone             = null,
+        public ?string                 $mobile            = null,
+        public ?string                 $dateOfBirth       = null,
+        public ?string                 $gender            = null,
+        public CivilStatus|string|null $civilStatus       = null,
+        public ?int                    $numberOfChildren  = 0,
+        public ?string                 $nationality       = 'Filipino',
         
-        // ── AIS / Trade Test (NEW) ────────────────────────────────────────
+        // ── AIS / Trade Test ──────────────────────────────────────────────
         public ?string $appliedPosition       = null,
         public ?string $tradeTestTry          = null,
         public ?string $tradeTestDate         = null,
@@ -43,12 +45,13 @@ final readonly class CreateApplicantDTO
         public ?string $postalCode        = null,
 
         // ── Passport / IDs ────────────────────────────────────────────────
-        public ?string $passportNumber    = null,
-        public ?string $passportExpiry    = null,
-        public ?string $sssNumber         = null,
-        public ?string $tinNumber         = null,
-        public ?string $philhealthNumber  = null,
-        public ?string $pagibigNumber     = null,
+        public ?string $passportNumber          = null,
+        public ?string $passportExpiry          = null,
+        public ?int    $passportIssuingOfficeId = null, // Added Property
+        public ?string $sssNumber               = null,
+        public ?string $tinNumber               = null,
+        public ?string $philhealthNumber        = null,
+        public ?string $pagibigNumber           = null,
 
         // ── Skill / Trade ─────────────────────────────────────────────────
         public ?string $skillCategory            = null,
@@ -91,7 +94,7 @@ final readonly class CreateApplicantDTO
         public ?float  $spouseSalary             = null,
         public string  $spouseSalaryUnit         = 'per_month',
 
-        // ── Japan Contacts (NEW array) ────────────────────────────────────
+        // ── Japan Contacts ────────────────────────────────────────────────
         public array   $japanContacts            = [],
 
         // ── Emergency Contact ─────────────────────────────────────────────

@@ -3,6 +3,7 @@
 namespace App\Domain\Internship\Services;
 
 use App\Domain\Internship\DTOs\GenerateMoaDTO;
+use App\Enums\CivilStatus;
 use App\Models\ApplicantInternship;
 use App\Models\Company;
 use App\Models\InternshipProgram;
@@ -11,10 +12,6 @@ use Illuminate\Support\Str;
 
 class InternshipResolverService
 {
-    /**
-     * Resolve final MOA/context values:
-     * Request override > Internship > Batch > Program > Company Master > Safe Fallbacks
-     */
     public function resolve(ApplicantInternship $internship, ?GenerateMoaDTO $dto = null): array
     {
         $internship->loadMissing([
@@ -47,7 +44,7 @@ class InternshipResolverService
             ?? $batch?->receivingCompany
             ?? $program?->defaultReceivingCompany;
 
-        // ── Dates Resolution ──────────────────────────────────────────────────
+        // ── Dates Resolution (Date of Signing) ───────────────────────────────
         $agreementDate = Carbon::parse(
             $dto?->agreementDate ?? $internship->agreement_date ?? now()
         );
@@ -95,7 +92,17 @@ class InternshipResolverService
             'Murcia'
         );
 
-        // ── Intern Personal Data & Address ────────────────────────────────────
+        // ── Intern Personal Data & Name Formatting ────────────────────────────
+        // 🎯 Name Format: First Name + Middle Name + Last Name
+        $nameParts = array_filter([
+            $applicant->first_name,
+            $applicant->middle_name,
+            $applicant->last_name,
+        ]);
+        $formattedFullName = !empty($nameParts)
+            ? implode(' ', $nameParts)
+            : $applicant->full_name;
+
         $internAddress = trim(implode(', ', array_filter([
             $applicant->current_address ?: $applicant->permanent_address,
             $applicant->city,
@@ -111,7 +118,25 @@ class InternshipResolverService
             ? Carbon::parse($applicant->date_of_birth)->age
             : ($applicant->age ?? 34);
 
-        // ── Guarantors ────────────────────────────────────────────────────────
+        // Passport Issuance Format (e.g. 03/19/2021 - DFA MANILA)
+        $passIssuedDate = $applicant->passport_issue_date
+            ? Carbon::parse($applicant->passport_issue_date)->format('m/d/Y')
+            : null;
+        $passIssuedPlace = !empty($applicant->passport_issue_place)
+            ? Str::upper(trim((string) $applicant->passport_issue_place))
+            : null;
+
+        if ($passIssuedDate && $passIssuedPlace) {
+            $internPassIssuedFormatted = "{$passIssuedDate}- {$passIssuedPlace}";
+        } elseif ($passIssuedDate) {
+            $internPassIssuedFormatted = $passIssuedDate;
+        } elseif ($passIssuedPlace) {
+            $internPassIssuedFormatted = $passIssuedPlace;
+        } else {
+            $internPassIssuedFormatted = 'DFA BACOLOD';
+        }
+
+        // ── Guarantors Pre-filling & Age Calculation ──────────────────────────
         $guarantors = $applicant->guarantors->sortBy('sequence')->values();
 
         $mapG = function ($g) use ($internAddress) {
@@ -127,17 +152,21 @@ class InternshipResolverService
                 ];
             }
 
+            // 🎯 Dynamically compute current age from date_of_birth
+            $calculatedAge = !empty($g->date_of_birth)
+                ? Carbon::parse($g->date_of_birth)->age
+                : ($g->age ?: '');
+
             $issued = $g->residence_cert_issued_at ? Carbon::parse($g->residence_cert_issued_at)->format('m/d/Y') : '';
             if (!empty($g->residence_cert_place)) {
-                // 🛡️ FIXED: Replaced Unicode en-dash ' – ' with standard clean ASCII hyphen ' - '
-                $issued = trim($issued . ' - ' . Str::upper($g->residence_cert_place));
+                $issued = trim($issued . ' - ' . Str::upper((string) $g->residence_cert_place));
             }
 
             return [
-                'full_name'             => Str::upper(trim($g->full_name ?? '')),
-                'age'                   => $g->age ?: '',
-                'civil_status'          => !empty($g->civil_status) ? Str::title($g->civil_status) : 'Single',
-                'nationality'           => !empty($g->nationality) ? Str::title($g->nationality) : 'Filipino',
+                'full_name'             => Str::upper(trim((string) ($g->full_name ?? ''))),
+                'age'                   => $calculatedAge,
+                'civil_status'          => $this->formatCivilStatus($g->civil_status),
+                'nationality'           => !empty($g->nationality) ? Str::title((string) $g->nationality) : 'Filipino',
                 'address'               => !empty($g->address) ? $g->address : $internAddress,
                 'residence_cert_no'     => $g->residence_cert_no ?? '',
                 'residence_cert_issued' => $issued,
@@ -157,7 +186,7 @@ class InternshipResolverService
             'agreement_year'        => $agreementDate->format('Y'),
             'municipality'          => $municipality,
 
-            // Dispatching Organization (Tricastle defaults if empty)
+            // Dispatching Organization
             'org' => [
                 'name'                => $this->valueOrFallback($dispatching?->name_on_document ?? $dispatching?->name, 'TRICASTLE INTERNATIONAL INC.'),
                 'address'             => $this->valueOrFallback($dispatching?->address, 'No.41 Roxas Avenue Brgy. 39, Bacolod City 6100 Philippines'),
@@ -168,7 +197,7 @@ class InternshipResolverService
                 'ack_passport_issued' => $this->valueOrFallback($dispatching?->signatory_id_issued, '03/19/2021- DFA MANILA'),
             ],
 
-            // Accepting Organization (MARUCON defaults if empty)
+            // Accepting Organization
             'partner' => [
                 'name'     => $this->valueOrFallback($accepting?->name_on_document ?? $accepting?->name, 'MARUCON'),
                 'director' => $this->valueOrFallback($accepting?->signatory_name, 'Toshiki Koyama'),
@@ -177,7 +206,7 @@ class InternshipResolverService
 
             'receiving_company'   => $this->valueOrFallback($receiving?->name_on_document ?? $receiving?->name, 'SOWA KOGYO'),
             'place_of_internship' => $place,
-            'job_description'     => Str::upper($job),
+            'job_description'     => Str::upper((string) $job),
 
             'contract_start_raw' => $contractStart->toDateString(),
             'contract_end_raw'   => $contractEnd->toDateString(),
@@ -214,16 +243,14 @@ class InternshipResolverService
             ],
 
             'intern' => [
-                'full_name'       => Str::upper($applicant->full_name),
-                'age'             => $internAge,
-                'civil_status'    => !empty($applicant->civil_status) ? Str::title($applicant->civil_status) : 'Single',
-                'nationality'     => !empty($applicant->nationality) ? Str::title($applicant->nationality) : 'Filipino',
-                'address'         => $internAddress,
-                'passport'        => $applicant->passport_number ?: 'P1677275D',
-                'passport_expiry' => $applicant->passport_expiry
-                    ? Carbon::parse($applicant->passport_expiry)->format('m/d/Y')
-                    : '12/03/2026',
-                'code'            => $applicant->applicant_code,
+                'full_name'             => Str::upper((string) $formattedFullName),
+                'age'                   => $internAge,
+                'civil_status'          => $this->formatCivilStatus($applicant->civil_status),
+                'nationality'           => !empty($applicant->nationality) ? Str::title((string) $applicant->nationality) : 'Filipino',
+                'address'               => $internAddress,
+                'passport'              => $applicant->passport_number ?: 'P1677275D',
+                'passport_issued_info'  => $internPassIssuedFormatted,
+                'code'                  => $applicant->applicant_code,
             ],
 
             'guarantor_1' => $mapG($guarantors->get(0)),
@@ -237,14 +264,34 @@ class InternshipResolverService
         ];
     }
 
+    /**
+     * Safely format civil status whether it's an Enum, string, or null
+     */
+    private function formatCivilStatus(mixed $status): string
+    {
+        if (empty($status)) {
+            return 'Single';
+        }
+
+        if ($status instanceof CivilStatus) {
+            return $status->label();
+        }
+
+        if ($status instanceof \BackedEnum) {
+            return Str::title((string) $status->value);
+        }
+
+        $enum = CivilStatus::tryFrom((string) $status);
+        if ($enum) {
+            return $enum->label();
+        }
+
+        return Str::title((string) $status);
+    }
+
     private function valueOrFallback(?string $value, string $fallback): string
     {
         return (!empty($value) && trim($value) !== '') ? trim($value) : $fallback;
-    }
-
-    private function mapGuarantor($g): array
-    {
-        return [];
     }
 
     public function resolveProgram(?int $programId, string $programType = 'titp'): ?InternshipProgram

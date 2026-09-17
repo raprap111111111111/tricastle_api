@@ -18,6 +18,9 @@ class SyncGuarantorsRequest extends FormRequest
                 if (isset($g['residence_cert_issued_at']) && $g['residence_cert_issued_at'] === '') {
                     $g['residence_cert_issued_at'] = null;
                 }
+                if (isset($g['date_of_birth']) && $g['date_of_birth'] === '') {
+                    $g['date_of_birth'] = null;
+                }
                 if (isset($g['age']) && ($g['age'] === '' || $g['age'] === null)) {
                     $g['age'] = null;
                 }
@@ -33,6 +36,7 @@ class SyncGuarantorsRequest extends FormRequest
         return [
             'guarantors'                             => ['required', 'array', 'min:1', 'max:2'],
             'guarantors.*.full_name'                 => ['required', 'string', 'max:255'],
+            'guarantors.*.date_of_birth'            => ['nullable', 'date'], 
             'guarantors.*.age'                       => ['nullable', 'integer', 'min:18', 'max:100'],
             'guarantors.*.civil_status'              => ['nullable', 'string', 'max:50'],
             'guarantors.*.nationality'               => ['nullable', 'string', 'max:50'],

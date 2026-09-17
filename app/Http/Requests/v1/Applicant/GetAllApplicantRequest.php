@@ -8,7 +8,6 @@ use Illuminate\Validation\Rule;
 
 class GetAllApplicantRequest extends FormRequest
 {
-    // 🎯 Change DEFAULT_ORDER_BY to 'created_at' (matches your composite index!)
     private const DEFAULT_ORDER_BY  = 'created_at';
     private const DEFAULT_ORDER_DIR = 'desc';
     private const DEFAULT_LIMIT     = 10;
@@ -40,17 +39,18 @@ class GetAllApplicantRequest extends FormRequest
             'order_dir' => ['nullable', Rule::in(['asc', 'desc'])],
 
             // Filters
-            'status'             => ['nullable', 'string'],
-            'exclude_statuses'   => ['nullable', 'string'],
-            'gender'             => ['nullable', 'in:male,female'],
-            'civil_status'       => ['nullable', 'string'],
-            'nationality'        => ['nullable', 'string'],
-            'quality_grade'      => ['nullable', 'in:A,B,C,D,F'],
-            'assigned_staff_id'  => ['nullable', 'integer', 'exists:users,id'],
-            'batch_id'           => ['nullable', 'integer', 'exists:batches,id'],
-            'city'               => ['nullable', 'string', 'max:100'],
-            'province'           => ['nullable', 'string', 'max:100'],
-            'address'            => ['nullable', 'string', 'max:200'],
+            'status'                     => ['nullable', 'string'],
+            'exclude_statuses'           => ['nullable', 'string'],
+            'gender'                     => ['nullable', 'in:male,female'],
+            'civil_status'               => ['nullable', 'string'],
+            'nationality'                => ['nullable', 'string'],
+            'quality_grade'              => ['nullable', 'in:A,B,C,D,F'],
+            'assigned_staff_id'          => ['nullable', 'integer', 'exists:users,id'],
+            'passport_issuing_office_id' => ['nullable', 'integer', 'exists:passport_issuing_offices,id'], // Filter support
+            'batch_id'                   => ['nullable', 'integer', 'exists:batches,id'],
+            'city'                       => ['nullable', 'string', 'max:100'],
+            'province'                   => ['nullable', 'string', 'max:100'],
+            'address'                    => ['nullable', 'string', 'max:200'],
         ];
     }
 
@@ -85,6 +85,7 @@ class GetAllApplicantRequest extends FormRequest
             'quality_score',
             'quality_grade',
             'passport_expiry',
+            'passport_issuing_office_id',
             'created_at',
             'updated_at',
         ];
