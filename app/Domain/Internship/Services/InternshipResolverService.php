@@ -16,6 +16,7 @@ class InternshipResolverService
     {
         $internship->loadMissing([
             'applicant.guarantors',
+            'applicant.passportIssuingOffice', // ✅ Added to prevent N+1 DB Queries
             'batch',
             'program.dispatchingCompany',
             'program.acceptingCompany',
@@ -58,10 +59,10 @@ class InternshipResolverService
 
         $years = (int) (
             $dto?->contractYears
-                ?? $internship->contract_years
-                ?? $batch?->contract_years
-                ?? $program?->contract_years
-                ?? 3
+            ?? $internship->contract_years
+            ?? $batch?->contract_years
+            ?? $program?->contract_years
+            ?? 3
         );
 
         $contractEnd = $dto?->contractEnd
@@ -118,15 +119,19 @@ class InternshipResolverService
             ? Carbon::parse($applicant->date_of_birth)->age
             : ($applicant->age ?? 34);
 
-        // Passport Issuance Format (e.g. 03/19/2021 - DFA MANILA)
+        // ── Passport Issuance Format (e.g. 08/25/2011- DFA BAGUIO) ──────────
         $passIssuedDate = $applicant->passport_issue_date
             ? Carbon::parse($applicant->passport_issue_date)->format('m/d/Y')
             : null;
-        $passIssuedPlace = !empty($applicant->passport_issue_place)
-            ? Str::upper(trim((string) $applicant->passport_issue_place))
-            : null;
+
+        $rawOfficeName = $applicant->passportIssuingOffice?->name
+            ?? $applicant->passport_issue_place
+            ?? null;
+
+        $passIssuedPlace = $this->formatDfaOfficeName($rawOfficeName);
 
         if ($passIssuedDate && $passIssuedPlace) {
+            // Tighter format matching Leah Tinsay's line (22 chars max)
             $internPassIssuedFormatted = "{$passIssuedDate}- {$passIssuedPlace}";
         } elseif ($passIssuedDate) {
             $internPassIssuedFormatted = $passIssuedDate;
@@ -138,6 +143,8 @@ class InternshipResolverService
 
         // ── Guarantors Pre-filling & Age Calculation ──────────────────────────
         $guarantors = $applicant->guarantors->sortBy('sequence')->values();
+
+        // Inside InternshipResolverService.php -> $mapG function:
 
         $mapG = function ($g) use ($internAddress) {
             if (!$g) {
@@ -152,14 +159,28 @@ class InternshipResolverService
                 ];
             }
 
-            // 🎯 Dynamically compute current age from date_of_birth
+            // 1. Dynamic Age
             $calculatedAge = !empty($g->date_of_birth)
                 ? Carbon::parse($g->date_of_birth)->age
                 : ($g->age ?: '');
 
-            $issued = $g->residence_cert_issued_at ? Carbon::parse($g->residence_cert_issued_at)->format('m/d/Y') : '';
-            if (!empty($g->residence_cert_place)) {
-                $issued = trim($issued . ' - ' . Str::upper((string) $g->residence_cert_place));
+            // 2. Dynamic Cedula Date & Place (No hardcoding, no leading hyphens)
+            $certDate = $g->residence_cert_issued_at
+                ? Carbon::parse($g->residence_cert_issued_at)->format('m/d/Y')
+                : null;
+
+            $certPlace = !empty($g->residence_cert_place)
+                ? Str::upper(trim((string) $g->residence_cert_place))
+                : null;
+
+            if ($certDate && $certPlace) {
+                $issued = "{$certDate} - {$certPlace}";
+            } elseif ($certDate) {
+                $issued = $certDate;
+            } elseif ($certPlace) {
+                $issued = $certPlace;
+            } else {
+                $issued = ''; // or '___' if your template requires placeholder blanks
             }
 
             return [
@@ -194,7 +215,7 @@ class InternshipResolverService
                 'signatory_title'     => $this->valueOrFallback($dispatching?->signatory_title, 'President'),
                 'passport'            => $this->valueOrFallback($dispatching?->signatory_passport, 'P6522838B'),
                 'ack_passport'        => $this->valueOrFallback($dispatching?->signatory_id_no, 'P1825298D'),
-                'ack_passport_issued' => $this->valueOrFallback($dispatching?->signatory_id_issued, '03/19/2021- DFA MANILA'),
+                'ack_passport_issued' => $this->valueOrFallback($dispatching?->signatory_id_issued, '03/19/2021 - DFA MANILA'), // ✅ Fixed hyphen spacing
             ],
 
             // Accepting Organization
@@ -305,5 +326,55 @@ class InternshipResolverService
             ->where('program_type', $programType)
             ->latest('id')
             ->first();
+    }
+
+    /**
+     * Cleans long DFA office names like "DFA Regional Consular Office – Baguio City"
+     * into a short clean string like "DFA - BAGUIO CITY".
+     */
+    /**
+     * Cleans long DFA office names into a short clean format (max ~10 chars)
+     * Example: "DFA Regional Consular Office – Baguio City" → "DFA BAGUIO"
+     */
+    private function formatDfaOfficeName(?string $rawName): string
+    {
+        if (empty($rawName)) {
+            return 'DFA BACOLOD';
+        }
+
+        $name = $rawName;
+
+        // 1. Remove parenthetical notes e.g. (SM Manila)
+        $name = preg_replace('/\s*\(.*?\)/', '', $name);
+
+        // 2. Remove verbose phrases
+        $verbose = [
+            'Regional Consular Office',
+            'Passport Service Program',
+            'Consular Office',
+            'POW',
+        ];
+        foreach ($verbose as $term) {
+            $name = preg_replace('/' . preg_quote($term, '/') . '/i', '', $name);
+        }
+
+        // 3. Convert all dashes to space
+        $name = str_replace(['–', '—', '-'], ' ', $name);
+
+        // 4. Remove redundant "City" suffix to prevent Word tab-stop line overflow
+        $name = preg_replace('/\s+City$/i', '', trim($name));
+
+        // 5. Collapse multiple spaces
+        $name = trim(preg_replace('/\s+/', ' ', $name));
+
+        // 6. Remove leading "DFA" so we can re-add it cleanly
+        $name = preg_replace('/^DFA\s*/i', '', $name);
+        $name = trim($name);
+
+        if (empty($name)) {
+            return 'DFA BACOLOD';
+        }
+
+        return Str::upper('DFA ' . $name);
     }
 }

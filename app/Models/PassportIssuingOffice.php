@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -28,8 +29,11 @@ class PassportIssuingOffice extends Model
         return $this->hasMany(Applicant::class, 'passport_issuing_office_id');
     }
 
-    public function scopeActive($query)
+    /**
+     * Scope to active offices only, ordered by name.
+     */
+    public function scopeActive(Builder $query): Builder
     {
-        return $query->where('is_active', true);
+        return $query->where('is_active', true)->orderBy('name');
     }
 }

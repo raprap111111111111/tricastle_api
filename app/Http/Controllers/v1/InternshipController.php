@@ -62,8 +62,14 @@ class InternshipController extends Controller
             InternshipMapper::fromCreateRequest($request)
         );
 
+        // 🎯 Eager load applicant.passportIssuingOffice relationship
         $internship->load([
-            'applicant', 'program', 'receivingCompany', 'acceptingCompany', 'dispatchingCompany', 'batch',
+            'applicant.passportIssuingOffice',
+            'program',
+            'receivingCompany',
+            'acceptingCompany',
+            'dispatchingCompany',
+            'batch',
         ]);
 
         return $this->responseSuccess(
@@ -101,7 +107,10 @@ class InternshipController extends Controller
         );
 
         $newInternship->load([
-            'applicant', 'program', 'receivingCompany', 'previousInternship',
+            'applicant',
+            'program',
+            'receivingCompany',
+            'previousInternship',
         ]);
 
         return $this->responseSuccess(

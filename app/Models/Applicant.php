@@ -58,6 +58,9 @@ class Applicant extends Model
         'passport_number',
         'passport_expiry',
         'passport_issuing_office_id', // Linked Relation
+        'passport_issue_date',        // ✅ Added
+        'passport_received_at',       // ✅ Added
+        'passport_expiration_date',   // ✅ Added
         'sss_number',
         'tin_number',
         'philhealth_number',
@@ -128,11 +131,14 @@ class Applicant extends Model
 
     protected $casts = [
         // ── Dates ─────────────────────────────────────────────────────────
-        'date_of_birth'   => 'date',
-        'trade_test_date' => 'date',
-        'passport_expiry' => 'date',
-        'final_listed_at' => 'datetime',
-        'rejected_at'     => 'datetime',
+        'date_of_birth'            => 'date',
+        'trade_test_date'          => 'date',
+        'passport_expiry'          => 'date',
+        'passport_issue_date'      => 'date', // ✅ Added
+        'passport_received_at'     => 'date', // ✅ Added
+        'passport_expiration_date' => 'date', // ✅ Added
+        'final_listed_at'          => 'datetime',
+        'rejected_at'              => 'datetime',
 
         // ── Numerics ──────────────────────────────────────────────────────
         'number_of_children'      => 'integer',
@@ -153,7 +159,7 @@ class Applicant extends Model
         'ssw_eligible'               => 'boolean',
 
         // ── Enum ──────────────────────────────────────────────────────────
-        'status' => ApplicantStatus::class,
+        'status'       => ApplicantStatus::class,
         'civil_status' => CivilStatus::class,
     ];
 
@@ -268,14 +274,22 @@ class Applicant extends Model
     // Relationships
     // ═══════════════════════════════════════════════════════
 
-    public function passportOffice(): BelongsTo
+    /**
+     * 🎯 FIX: Added passportIssuingOffice relationship (Fixes 500 error)
+     */
+    public function passportIssuingOffice(): BelongsTo
     {
         return $this->belongsTo(PassportIssuingOffice::class, 'passport_issuing_office_id');
     }
 
     /**
-     * 🎯 ADDED: Guarantors Relationship (Fixes 500 error on guarantors/sync)
+     * Alias for passportIssuingOffice
      */
+    public function passportOffice(): BelongsTo
+    {
+        return $this->passportIssuingOffice();
+    }
+
     public function guarantors(): HasMany
     {
         return $this->hasMany(ApplicantGuarantor::class)->orderBy('sequence');

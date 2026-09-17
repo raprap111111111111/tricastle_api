@@ -26,6 +26,10 @@ final readonly class CreateInternshipDTO
         public ?string $timeStart = null,
         public ?string $timeEnd = null,
         public ?string $lunchBreak = null,
+        // 🎯 PASSPORT PROPERTIES ADDED HERE:
+        public ?string $passportNumber = null,
+        public ?int    $passportIssuingOfficeId = null,
+        public ?string $passportIssueDate = null,
         public ?array  $guarantors = null,
         public ?int    $createdBy = null,
     ) {}

@@ -38,39 +38,47 @@ class InternshipResource extends JsonResource
             'can_change_company'     => $this->canChangeCompany(),
             'previous_internship_id' => $this->previous_internship_id,
 
+            // 🎯 Updated Applicant relation serializer
             'applicant' => $this->whenLoaded('applicant', fn () => [
-                'id'             => $this->applicant->id,
-                'applicant_code' => $this->applicant->applicant_code,
-                'full_name'      => $this->applicant->full_name,
-                'passport_number'=> $this->applicant->passport_number,
+                'id'                         => $this->applicant->id,
+                'applicant_code'             => $this->applicant->applicant_code,
+                'full_name'                  => $this->applicant->full_name,
+                'passport_number'            => $this->applicant->passport_number,
+                'passport_issuing_office_id' => $this->applicant->passport_issuing_office_id,
+                'passport_issue_date'        => $this->applicant->passport_issue_date?->toDateString(),
+                'passport_issuing_office'    => $this->applicant->passportIssuingOffice ? [
+                    'id'     => $this->applicant->passportIssuingOffice->id,
+                    'region' => $this->applicant->passportIssuingOffice->region,
+                    'name'   => $this->applicant->passportIssuingOffice->name,
+                ] : null,
             ]),
 
             'program' => $this->whenLoaded('program', fn () => new InternshipProgramResource($this->program)),
             'batch'   => $this->whenLoaded('batch', fn () => [
-                'id' => $this->batch?->id,
+                'id'           => $this->batch?->id,
                 'batch_number' => $this->batch?->batch_number,
-                'name' => $this->batch?->name,
+                'name'         => $this->batch?->name,
             ]),
 
             'dispatching_company' => $this->whenLoaded('dispatchingCompany', fn () => [
-                'id' => $this->dispatchingCompany?->id,
+                'id'   => $this->dispatchingCompany?->id,
                 'code' => $this->dispatchingCompany?->code,
                 'name' => $this->dispatchingCompany?->name,
             ]),
             'accepting_company' => $this->whenLoaded('acceptingCompany', fn () => [
-                'id' => $this->acceptingCompany?->id,
+                'id'   => $this->acceptingCompany?->id,
                 'code' => $this->acceptingCompany?->code,
                 'name' => $this->acceptingCompany?->name,
             ]),
             'receiving_company' => $this->whenLoaded('receivingCompany', fn () => [
-                'id' => $this->receivingCompany?->id,
+                'id'   => $this->receivingCompany?->id,
                 'code' => $this->receivingCompany?->code,
                 'name' => $this->receivingCompany?->name,
             ]),
 
-            'documents' => InternshipDocumentResource::collection($this->whenLoaded('documents')),
-            'created_at'=> $this->created_at?->toISOString(),
-            'updated_at'=> $this->updated_at?->toISOString(),
+            'documents'  => InternshipDocumentResource::collection($this->whenLoaded('documents')),
+            'created_at' => $this->created_at?->toISOString(),
+            'updated_at' => $this->updated_at?->toISOString(),
         ];
     }
 }

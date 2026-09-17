@@ -21,6 +21,18 @@ class CreateInternshipAction
     {
         return DB::transaction(function () use ($dto) {
             $applicant = Applicant::findOrFail($dto->applicantId);
+
+            // 🎯 SAVE PASSPORT DATA ON THE APPLICANT MODEL
+            $passportData = array_filter([
+                'passport_number'            => $dto->passportNumber,
+                'passport_issuing_office_id' => $dto->passportIssuingOfficeId,
+                'passport_issue_date'        => $dto->passportIssueDate,
+            ], fn ($val) => ! is_null($val));
+
+            if (! empty($passportData)) {
+                $applicant->update($passportData);
+            }
+
             $program = $this->resolver->resolveProgram($dto->internshipProgramId, $dto->programType);
 
             if (! $program && ! $dto->receivingCompanyId) {

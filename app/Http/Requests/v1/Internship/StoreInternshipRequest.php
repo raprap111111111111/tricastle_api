@@ -37,16 +37,23 @@ class StoreInternshipRequest extends FormRequest
             'time_start'              => ['nullable', 'string', 'max:30'],
             'time_end'                => ['nullable', 'string', 'max:30'],
             'lunch_break'             => ['nullable', 'string', 'max:50'],
-            'guarantors'              => ['nullable', 'array', 'max:2'],
-            'guarantors.*.full_name'  => ['required_with:guarantors', 'string', 'max:255'],
-            'guarantors.*.age'        => ['nullable', 'integer', 'min:18', 'max:100'],
-            'guarantors.*.civil_status' => ['nullable', 'string', 'max:50'],
-            'guarantors.*.nationality'=> ['nullable', 'string', 'max:50'],
-            'guarantors.*.address'    => ['nullable', 'string'],
-            'guarantors.*.residence_cert_no' => ['nullable', 'string', 'max:50'],
+            
+            // 🎯 Passport Fields
+            'passport_number'            => ['nullable', 'string', 'max:50'],
+            'passport_issuing_office_id' => ['nullable', 'integer', 'exists:passport_issuing_offices,id'],
+            'passport_issue_date'        => ['nullable', 'date'],
+
+            // Guarantors
+            'guarantors'                             => ['nullable', 'array', 'max:2'],
+            'guarantors.*.full_name'                 => ['required_with:guarantors', 'string', 'max:255'],
+            'guarantors.*.age'                       => ['nullable', 'integer', 'min:18', 'max:100'],
+            'guarantors.*.civil_status'              => ['nullable', 'string', 'max:50'],
+            'guarantors.*.nationality'               => ['nullable', 'string', 'max:50'],
+            'guarantors.*.address'                   => ['nullable', 'string'],
+            'guarantors.*.residence_cert_no'         => ['nullable', 'string', 'max:50'],
             'guarantors.*.residence_cert_issued_at' => ['nullable', 'date'],
-            'guarantors.*.residence_cert_place' => ['nullable', 'string', 'max:120'],
-            'guarantors.*.relationship' => ['nullable', 'string', 'max:50'],
+            'guarantors.*.residence_cert_place'      => ['nullable', 'string', 'max:120'],
+            'guarantors.*.relationship'              => ['nullable', 'string', 'max:50'],
         ];
     }
 }
