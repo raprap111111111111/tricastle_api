@@ -5,6 +5,7 @@ namespace App\Domain\Internship\Actions;
 use App\Domain\Internship\DTOs\SyncGuarantorsDTO;
 use App\Enums\CivilStatus;
 use App\Models\Applicant;
+use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -31,11 +32,18 @@ class SyncGuarantorsAction
                     $civilStatus = CivilStatus::tryFrom(strtolower($civilStatus))?->value ?? strtolower($civilStatus);
                 }
 
+                // 🎯 Extract date_of_birth and calculate age fallback
+                $dob = !empty($data['date_of_birth']) ? $data['date_of_birth'] : null;
+                $age = $dob 
+                    ? Carbon::parse($dob)->age 
+                    : ($data['age'] ?? null);
+
                 $applicant->guarantors()->updateOrCreate(
                     ['sequence' => $index + 1],
                     [
                         'full_name'                => $data['full_name'],
-                        'age'                      => $data['age'] ?? null,
+                        'date_of_birth'            => $dob,                
+                        'age'                      => $age,        
                         'civil_status'             => $civilStatus,
                         'nationality'              => $data['nationality'] ?? 'Filipino',
                         'address'                  => $data['address'] ?? null,
