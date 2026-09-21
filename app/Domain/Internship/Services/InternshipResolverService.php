@@ -16,7 +16,7 @@ class InternshipResolverService
     {
         $internship->loadMissing([
             'applicant.guarantors',
-            'applicant.passportIssuingOffice', // ✅ Added to prevent N+1 DB Queries
+            'applicant.passportIssuingOffice',
             'batch',
             'program.dispatchingCompany',
             'program.acceptingCompany',
@@ -104,16 +104,9 @@ class InternshipResolverService
             ? implode(' ', $nameParts)
             : $applicant->full_name;
 
-        $internAddress = trim(implode(', ', array_filter([
-            $applicant->current_address ?: $applicant->permanent_address,
-            $applicant->city,
-            $applicant->province,
-            'Philippines',
-        ])));
-
-        if (empty($internAddress) || $internAddress === 'Philippines') {
-            $internAddress = 'Hda. Josefa II, Brgy. Blumentritt, Murcia, Negros Occidental, Philippines';
-        }
+        // 🎯 Intern Address (Guaranteed to end with ", Philippines")
+        $internRawAddress = $applicant->current_address ?: $applicant->permanent_address;
+        $internAddress = $this->formatPhAddress($internRawAddress, $applicant->city, $applicant->province);
 
         $internAge = $applicant->date_of_birth
             ? Carbon::parse($applicant->date_of_birth)->age
@@ -141,10 +134,8 @@ class InternshipResolverService
             $internPassIssuedFormatted = 'DFA BACOLOD';
         }
 
-        // ── Guarantors Pre-filling & Age Calculation ──────────────────────────
+        // ── Guarantors Pre-filling & Address Formatting ─────────────────────────
         $guarantors = $applicant->guarantors->sortBy('sequence')->values();
-
-        // Inside InternshipResolverService.php -> $mapG function:
 
         $mapG = function ($g) use ($internAddress) {
             if (!$g) {
@@ -164,7 +155,7 @@ class InternshipResolverService
                 ? Carbon::parse($g->date_of_birth)->age
                 : ($g->age ?: '');
 
-            // 2. Dynamic Cedula Date & Place (No hardcoding, no leading hyphens)
+            // 2. Dynamic Cedula Date & Place
             $certDate = $g->residence_cert_issued_at
                 ? Carbon::parse($g->residence_cert_issued_at)->format('m/d/Y')
                 : null;
@@ -180,15 +171,21 @@ class InternshipResolverService
             } elseif ($certPlace) {
                 $issued = $certPlace;
             } else {
-                $issued = ''; // or '___' if your template requires placeholder blanks
+                $issued = '';
             }
+
+            // 🎯 Guarantor Address (Guaranteed to end with ", Philippines")
+            $rawGAddress = $g->address ?? $g->permanent_address ?? null;
+            $formattedGAddress = !empty($rawGAddress)
+                ? $this->formatPhAddress($rawGAddress, $g->municipality ?? $g->city ?? null, $g->province ?? null)
+                : $internAddress;
 
             return [
                 'full_name'             => Str::upper(trim((string) ($g->full_name ?? ''))),
                 'age'                   => $calculatedAge,
                 'civil_status'          => $this->formatCivilStatus($g->civil_status),
                 'nationality'           => !empty($g->nationality) ? Str::title((string) $g->nationality) : 'Filipino',
-                'address'               => !empty($g->address) ? $g->address : $internAddress,
+                'address'               => $formattedGAddress,
                 'residence_cert_no'     => $g->residence_cert_no ?? '',
                 'residence_cert_issued' => $issued,
             ];
@@ -201,10 +198,11 @@ class InternshipResolverService
             'program_type'          => $internship->program_type?->value ?? $internship->program_type ?? 'titp',
             'document_template'     => $program?->document_template ?: 'moa.template',
 
+            // 🎯 Date of Signing Placeholders
             'agreement_date_raw'    => $agreementDate->toDateString(),
-            'agreement_day_ordinal' => $agreementDate->format('jS'),
-            'agreement_month'       => $agreementDate->format('F'),
-            'agreement_year'        => $agreementDate->format('Y'),
+            'agreement_day_ordinal' => $agreementDate->format('jS'),             // e.g. "28th"
+            'agreement_month'       => Str::upper($agreementDate->format('F')), // e.g. "SEPTEMBER"
+            'agreement_year'        => $agreementDate->format('Y'),              // e.g. "2026"
             'municipality'          => $municipality,
 
             // Dispatching Organization
@@ -215,7 +213,7 @@ class InternshipResolverService
                 'signatory_title'     => $this->valueOrFallback($dispatching?->signatory_title, 'President'),
                 'passport'            => $this->valueOrFallback($dispatching?->signatory_passport, 'P6522838B'),
                 'ack_passport'        => $this->valueOrFallback($dispatching?->signatory_id_no, 'P1825298D'),
-                'ack_passport_issued' => $this->valueOrFallback($dispatching?->signatory_id_issued, '03/19/2021 - DFA MANILA'), // ✅ Fixed hyphen spacing
+                'ack_passport_issued' => $this->valueOrFallback($dispatching?->signatory_id_issued, '03/19/2021 - DFA MANILA'),
             ],
 
             // Accepting Organization
@@ -286,8 +284,36 @@ class InternshipResolverService
     }
 
     /**
-     * Safely format civil status whether it's an Enum, string, or null
+     * Format Philippine address cleanly to end with ", Philippines"
      */
+    private function formatPhAddress(?string $mainAddress, ?string $city = null, ?string $province = null): string
+    {
+        $parts = [];
+        if (!empty($mainAddress)) {
+            $parts[] = trim($mainAddress);
+        }
+        if (!empty($city) && !str_contains(strtolower($mainAddress ?? ''), strtolower($city))) {
+            $parts[] = trim($city);
+        }
+        if (!empty($province) && !str_contains(strtolower($mainAddress ?? ''), strtolower($province))) {
+            $parts[] = trim($province);
+        }
+
+        $full = implode(', ', array_filter($parts));
+        $full = trim($full, ', ');
+
+        if (empty($full)) {
+            return 'Hda. Josefa II, Brgy. Blumentritt, Murcia, Negros Occidental, Philippines';
+        }
+
+        // Ensure address ends cleanly with ", Philippines"
+        if (!preg_match('/philippines$/i', $full) && !preg_match('/, ph$/i', $full)) {
+            $full .= ', Philippines';
+        }
+
+        return $full;
+    }
+
     private function formatCivilStatus(mixed $status): string
     {
         if (empty($status)) {
