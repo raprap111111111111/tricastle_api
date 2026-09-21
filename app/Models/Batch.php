@@ -42,8 +42,6 @@ class Batch extends Model
         'default_job_description',
         'place_of_internship_override',
         'municipality',
-
-
     ];
 
     protected $casts = [
@@ -100,6 +98,16 @@ class Batch extends Model
     // ═══════════════════════════════════════════════════════
     // Relationships
     // ═══════════════════════════════════════════════════════
+
+    /**
+     * 🎯 FIX: Alias/Default relationship for company queries.
+     * Points to receiving_company_id by default (or company_id if present).
+     */
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class, 'receiving_company_id');
+    }
+
     public function internshipProgram(): BelongsTo
     {
         return $this->belongsTo(InternshipProgram::class);
@@ -119,6 +127,7 @@ class Batch extends Model
     {
         return $this->hasMany(ApplicantInternship::class);
     }
+
     public function applicantBatches(): HasMany
     {
         return $this->hasMany(ApplicantBatch::class);

@@ -22,6 +22,8 @@ use App\Http\Resources\v1\ApplicantResource;
 use App\Models\Applicant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Domain\Applicant\Actions\ExportInsuranceFormAction;
+use App\Http\Requests\v1\Applicant\ExportInsuranceRequest;
 
 class ApplicantController extends Controller
 {
@@ -35,6 +37,7 @@ class ApplicantController extends Controller
         private readonly AssignApplicantAction       $assignAction,
         private readonly TransferApplicantAction     $transferAction,
         private readonly UpdateApplicantStatusAction $updateStatusAction,
+        private readonly ExportInsuranceFormAction   $exportInsuranceAction,
     ) {}
 
     // ═══════════════════════════════════════════════════════
@@ -45,7 +48,7 @@ class ApplicantController extends Controller
     {
         $result = $this->listAction->execute(
             $request->validated(),
-            ApplicantResource::class  
+            ApplicantResource::class
         );
 
         return $this->responseSuccess($result, 'Applicants retrieved successfully');
@@ -240,5 +243,25 @@ class ApplicantController extends Controller
             'has_warnings'   => count($this->duplicateService->getWarnings($duplicates)) > 0,
             'duplicates'     => $duplicates,
         ], count($duplicates) > 0 ? 'Duplicates found' : 'No duplicates found');
+    }
+
+    /**
+     * Export selected applicants into Migrant Worker Insurance DOCX.
+     * POST /api/v1/applicants/export-insurance
+     */
+
+    public function exportInsurance(ExportInsuranceRequest $request): JsonResponse
+    {
+        $applicantsPayload = $request->input('applicants') ?? $request->input('applicant_ids');
+
+        $result = $this->exportInsuranceAction->execute(
+            $applicantsPayload,
+            $request->input('departure_date')
+        );
+
+        return $this->responseSuccess(
+            $result,
+            'Migrant Insurance document generated successfully'
+        );
     }
 }

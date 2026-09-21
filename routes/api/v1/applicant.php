@@ -3,17 +3,20 @@
 use App\Http\Controllers\v1\ApplicantController;
 use Illuminate\Support\Facades\Route;
 
-// ─── Duplicate Check ────────────────────────────────────────────────────────
-// Declared before apiResource to avoid route parameter collision
+// ─── Bulk Actions & Special Endpoints ───────────────────────────────────────
+// Declared before apiResource to avoid route parameter collision ({applicant})
 Route::post('applicants/check-duplicates', [ApplicantController::class, 'checkDuplicates'])
     ->name('applicants.check-duplicates');
+
+Route::post('applicants/export-insurance', [ApplicantController::class, 'exportInsurance'])
+    ->name('applicants.export-insurance');
 
 // ─── Core CRUD ──────────────────────────────────────────────────────────────
 // Registers: index, store, show, update, destroy
 Route::apiResource('applicants', ApplicantController::class)
     ->whereNumber('applicant');
 
-// ─── Status Transitions ─────────────────────────────────────────────────────
+// ─── Status Transitions & Actions ──────────────────────────────────────────
 Route::prefix('applicants/{applicant}')
     ->whereNumber('applicant')
     ->group(function () {
