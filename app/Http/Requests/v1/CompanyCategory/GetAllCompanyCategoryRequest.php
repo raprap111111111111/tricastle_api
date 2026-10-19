@@ -9,7 +9,7 @@ class GetAllCompanyCategoryRequest extends FormRequest
 {
     private const DEFAULT_ORDER_BY  = 'created_at';
     private const DEFAULT_ORDER_DIR = 'desc';
-    private const DEFAULT_LIMIT     = 15;
+    private const DEFAULT_LIMIT     = 100;
     private const MAX_LIMIT         = 100;
 
     public function authorize(): bool
