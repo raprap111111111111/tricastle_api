@@ -16,20 +16,25 @@ class PdosCertificateController extends Controller
             'applicant_ids'   => ['required', 'array', 'min:1'],
             'applicant_ids.*' => ['integer', 'exists:applicants,id'],
             'pdos_date'       => ['nullable', 'string'],
+            'cert_no'         => ['nullable', 'string', 'max:100'],
         ]);
 
-        $applicants = Applicant::with(['applicant_batches.batch.company'])
-            ->whereIn('id', $validated['applicant_ids'])
+        $applicantIds = $validated['applicant_ids'];
+
+        // Eager load company and its category
+        $applicants = Applicant::with(['applicantBatches.batch.company.category'])
+            ->whereIn('id', $applicantIds)
             ->get()
-            ->sortBy(fn ($a) => array_search($a->id, $validated['applicant_ids']))
+            ->sortBy(fn ($a) => array_search($a->id, $applicantIds))
             ->values();
 
         $outputPath = $action->execute($applicants, [
             'pdos_date' => $validated['pdos_date'] ?? now()->format('F j, Y'),
+            'cert_no'   => $validated['cert_no'] ?? null,
         ]);
 
         return response()
-            ->download($outputPath, 'PDOS_BATCH_CERTIFICATES.docx')
+            ->download($outputPath, 'PDOS_Certificates_' . now()->format('Y-m-d') . '.docx')
             ->deleteFileAfterSend(true);
     }
 }

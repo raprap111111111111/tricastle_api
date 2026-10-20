@@ -228,7 +228,6 @@ class MoaGeneratorService
 
             $templateProcessor->setValues([
                 // 🎯 Signing Date (supports DAY_S / MONTH_S / YEAR_S and S_DAY / S_MONTH / S_YEAR)
-                // Date
                 'DAY'     => $this->clean($payload['agreement_day_ordinal'] ?? '____'),
                 'MONTH'   => $this->clean($payload['agreement_month'] ?? '__________'),
                 'YEAR'    => $this->clean($payload['agreement_year'] ?? '____'),
@@ -241,9 +240,7 @@ class MoaGeneratorService
                 'S_MONTH' => $this->clean($payload['agreement_month'] ?? '__________'),
                 'S_YEAR'  => $this->clean($payload['agreement_year'] ?? '____'),
 
-                // Location
-                'CITY'          => $this->clean($payload['municipality'] ?? 'Murcia'),
-                'LOCATION_FULL' => $this->formatLocation($payload['municipality'] ?? 'Murcia'),
+                'CITY'    => $this->clean($payload['municipality'] ?? 'Murcia'),
 
                 'I_NAME'             => $this->clean($payload['intern']['full_name'] ?? '________________________'),
                 'I_AGE'              => $this->clean($payload['intern']['age'] ?: '___'),
@@ -523,55 +520,5 @@ class MoaGeneratorService
         @unlink($tmpZip);
 
         return $zipName;
-    }
-
-    /**
-     * Smart location label:
-     * Murcia -> Municipality of Murcia
-     * Bacolod / Bacolod City -> City of Bacolod
-     */
-    private function formatLocation(?string $rawLocation): string
-    {
-        $clean = trim($this->clean($rawLocation));
-        if ($clean === '') {
-            return 'Municipality of Murcia';
-        }
-
-        $lower = mb_strtolower($clean);
-
-        // Already complete
-        if (str_starts_with($lower, 'city of') || str_starts_with($lower, 'municipality of')) {
-            return $this->clean(mb_convert_case($clean, MB_CASE_TITLE, 'UTF-8'));
-        }
-
-        $knownCities = [
-            'bacolod',
-            'talisay',
-            'silay',
-            'bago',
-            'san carlos',
-            'kabankalan',
-            'victorias',
-            'cadiz',
-            'sagay',
-            'sipalay',
-            'himamaylan',
-            'escalante',
-            'manila',
-            'cebu',
-            'davao',
-            'iloilo',
-            'cagayan de oro',
-        ];
-
-        $nameWithoutCity = trim((string) preg_replace('/\bcity\b/i', '', $clean));
-        $isCity = str_ends_with($lower, 'city')
-            || in_array(mb_strtolower($nameWithoutCity), $knownCities, true);
-
-        if ($isCity) {
-            return 'City of ' . $this->clean(mb_convert_case($nameWithoutCity, MB_CASE_TITLE, 'UTF-8'));
-        }
-
-        return 'Municipality of ' . $this->clean(mb_convert_case($clean, MB_CASE_TITLE, 'UTF-8'));
     }
 }

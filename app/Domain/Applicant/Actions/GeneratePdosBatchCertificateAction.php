@@ -2,106 +2,206 @@
 
 namespace App\Domain\Applicant\Actions;
 
-use App\Models\Applicant;
+use App\Models\Company;
 use Illuminate\Support\Collection;
 use PhpOffice\PhpWord\TemplateProcessor;
+use ReflectionClass;
 
 class GeneratePdosBatchCertificateAction
 {
-    /**
-     * Generate a single PDOS Word Document with 2 certificates per page.
-     * Automatically handles 1, 10, 40, or 100+ applicants!
-     *
-     * @param  Collection<Applicant>  $applicants
-     * @param  array  $options
-     * @return string Path to generated temporary .docx file
-     */
     public function execute(Collection $applicants, array $options = []): string
     {
         $templatePath = resource_path('templates/PDOS.docx');
 
-        if (! file_exists($templatePath)) {
-            throw new \RuntimeException("PDOS template not found at: {$templatePath}");
+        if (!file_exists($templatePath)) {
+            throw new \RuntimeException("PDOS template not found at {$templatePath}");
         }
+
+        $formattedDate = isset($options['pdos_date']) && !empty($options['pdos_date'])
+            ? date('F j, Y', strtotime($options['pdos_date']))
+            : now()->format('F j, Y');
+
+        $baseCertNo = $options['cert_no'] ?? null;
+
+        $tempFile = tempnam(sys_get_temp_dir(), 'PDOS_BATCH_') . '.docx';
 
         $templateProcessor = new TemplateProcessor($templatePath);
 
-        $pdosDate = $options['pdos_date'] ?? now()->format('F j, Y');
+        // 🎯 SAFELY clean split XML tags inside {{...}} in document.xml ONLY
+        $this->sanitizeMainDocumentXml($templateProcessor);
 
-        // Group all selected applicants into pairs of 2 (Top and Bottom)
-        $pages = $applicants->chunk(2)->values();
-        $totalPages = $pages->count();
+        // Set macro delimiters to {{ and }}
+        $templateProcessor->setMacroChars('{{', '}}');
 
-        // Clone the page block for as many pages as needed
-        $templateProcessor->cloneBlock('PAGE_BLOCK', $totalPages, true, true);
+        $chunks = $applicants->chunk(2)->values();
+        $totalPages = $chunks->count();
 
-        // Fill each page pair
-        foreach ($pages as $pageIndex => $pair) {
-            $blockNumber = $pageIndex + 1; // 1-based index (#1, #2, #3...)
+        $certCounter = 0;
 
-            $topApplicant    = $pair->get(0);
-            $bottomApplicant = $pair->get(1);
+        for ($i = 0; $i < $totalPages; $i++) {
+            $pair = $chunks[$i]->values();
+            $top = $pair->get(0);
+            $bottom = $pair->get(1);
 
-            // Fill Top Certificate
-            if ($topApplicant) {
-                $this->fillSlot($templateProcessor, 'TOP', $blockNumber, $topApplicant, $pdosDate);
+            // ─── TOP APPLICANT ───────────────────────────────────────────────
+            if ($top) {
+                $certCounter++;
+                $topCompany = $this->getCompany($top);
+
+                $templateProcessor->setValue('APPLICANT_NAME_TOP', $this->getApplicantName($top));
+                $templateProcessor->setValue('COMPANY_CATEGORY_TOP', $this->getCategoryName($top, $topCompany));
+                $templateProcessor->setValue('COUNTRY_TOP', $this->getCountry($topCompany));
+                $templateProcessor->setValue('COMPANY_TOP', $this->getForeignEmployer($topCompany));
+                $templateProcessor->setValue('COMPANY_EMPLOYER_TOP', $this->getForeignPrincipal($topCompany));
             } else {
-                $this->clearSlot($templateProcessor, 'TOP', $blockNumber);
+                $templateProcessor->setValue('APPLICANT_NAME_TOP', '');
+                $templateProcessor->setValue('COMPANY_CATEGORY_TOP', '');
+                $templateProcessor->setValue('COUNTRY_TOP', '');
+                $templateProcessor->setValue('COMPANY_TOP', '');
+                $templateProcessor->setValue('COMPANY_EMPLOYER_TOP', '');
             }
 
-            // Fill Bottom Certificate
-            if ($bottomApplicant) {
-                $this->fillSlot($templateProcessor, 'BOTTOM', $blockNumber, $bottomApplicant, $pdosDate);
+            // ─── BOTTOM APPLICANT ────────────────────────────────────────────
+            if ($bottom) {
+                $certCounter++;
+                $bottomCompany = $this->getCompany($bottom);
+
+                $templateProcessor->setValue('APPLICANT_NAME_BOTTOM', $this->getApplicantName($bottom));
+                $templateProcessor->setValue('COMPANY_CATEGORY_BOTTOM', $this->getCategoryName($bottom, $bottomCompany));
+                $templateProcessor->setValue('COUNTRY_BOTTOM', $this->getCountry($bottomCompany));
+                $templateProcessor->setValue('COMPANY_BOTTOM', $this->getForeignEmployer($bottomCompany));
+                $templateProcessor->setValue('COMPANY_EMPLOYER_BOTTOM', $this->getForeignPrincipal($bottomCompany));
             } else {
-                $this->clearSlot($templateProcessor, 'BOTTOM', $blockNumber);
+                $templateProcessor->setValue('APPLICANT_NAME_BOTTOM', '');
+                $templateProcessor->setValue('COMPANY_CATEGORY_BOTTOM', '');
+                $templateProcessor->setValue('COUNTRY_BOTTOM', '');
+                $templateProcessor->setValue('COMPANY_BOTTOM', '');
+                $templateProcessor->setValue('COMPANY_EMPLOYER_BOTTOM', '');
             }
+
+            // ─── COMMON ──────────────────────────────────────────────────────
+            $templateProcessor->setValue('PDOS_DATE', $formattedDate);
+
+            // Format Certificate Number
+            $certNoFormatted = $this->formatCertNo($baseCertNo, $certCounter);
+            $templateProcessor->setValue('CERT_NO', $certNoFormatted);
         }
 
-        // Save output to temp directory
-        $outputDir = storage_path('app/temp');
-        if (! is_dir($outputDir)) {
-            mkdir($outputDir, 0755, true);
-        }
+        $templateProcessor->saveAs($tempFile);
 
-        $fileName = 'PDOS_BATCH_' . count($applicants) . '_PAX_' . time() . '.docx';
-        $outputPath = $outputDir . '/' . $fileName;
-
-        $templateProcessor->saveAs($outputPath);
-
-        return $outputPath;
+        return $tempFile;
     }
 
-    private function fillSlot(
-        TemplateProcessor $templateProcessor,
-        string $position,
-        int $blockNumber,
-        Applicant $applicant,
-        string $pdosDate
-    ): void {
-        $fullName  = strtoupper(trim("{$applicant->first_name} {$applicant->middle_name} {$applicant->last_name} {$applicant->suffix}"));
-        $category  = strtoupper($applicant->trade_or_occupation ?? $applicant->skill_category ?? 'REINFORCING BAR CONSTRUCTION WORK');
-        $country   = 'JAPAN';
-        $company   = 'MULTI CONTRACTORS COOPERATIVE';
-        $principal = 'ISHIZAWA KOGYO';
-        $certNo    = 'TRI' . now()->format('Y') . '_' . str_pad((string) $applicant->id, 5, '0', STR_PAD_LEFT);
-
-        $templateProcessor->setValue("APPLICANT_NAME_{$position}#{$blockNumber}", $fullName);
-        $templateProcessor->setValue("COMPANY_CATEGORY_{$position}#{$blockNumber}", $category);
-        $templateProcessor->setValue("COUNTRY_{$position}#{$blockNumber}", $country);
-        $templateProcessor->setValue("COMPANY_{$position}#{$blockNumber}", $company);
-        $templateProcessor->setValue("COMPANY_EMPLOYER_{$position}#{$blockNumber}", $principal);
-        $templateProcessor->setValue("PDOS_DATE_{$position}#{$blockNumber}", $pdosDate);
-        $templateProcessor->setValue("CERT_NO_{$position}#{$blockNumber}", $certNo);
-    }
-
-    private function clearSlot(TemplateProcessor $templateProcessor, string $position, int $blockNumber): void
+    /**
+     * Safely clean split XML tags inside {{...}} in tempDocumentMainPart ONLY
+     */
+    private function sanitizeMainDocumentXml(TemplateProcessor $templateProcessor): void
     {
-        $templateProcessor->setValue("APPLICANT_NAME_{$position}#{$blockNumber}", '');
-        $templateProcessor->setValue("COMPANY_CATEGORY_{$position}#{$blockNumber}", '');
-        $templateProcessor->setValue("COUNTRY_{$position}#{$blockNumber}", '');
-        $templateProcessor->setValue("COMPANY_{$position}#{$blockNumber}", '');
-        $templateProcessor->setValue("COMPANY_EMPLOYER_{$position}#{$blockNumber}", '');
-        $templateProcessor->setValue("PDOS_DATE_{$position}#{$blockNumber}", '');
-        $templateProcessor->setValue("CERT_NO_{$position}#{$blockNumber}", '');
+        $reflection = new ReflectionClass($templateProcessor);
+        if (!$reflection->hasProperty('tempDocumentMainPart')) {
+            return;
+        }
+
+        $property = $reflection->getProperty('tempDocumentMainPart');
+        $property->setAccessible(true);
+        $xml = $property->getValue($templateProcessor);
+
+        if (is_string($xml)) {
+            // 1. Join split braces: { <w:t> { </w:t> -> {{
+            $xml = preg_replace('/\{\s*<[^>]+>\s*\{/', '{{', $xml);
+            $xml = preg_replace('/\}\s*<[^>]+>\s*\}/', '}}', $xml);
+
+            // 2. Strip XML tags strictly inside {{...}} so PHPWord can match {{VAR}}
+            $xml = preg_replace_callback('/\{\{(.*?)\}\}/s', function ($matches) {
+                return '{{' . strip_tags($matches[1]) . '}}';
+            }, $xml);
+
+            $property->setValue($templateProcessor, $xml);
+        }
+    }
+
+    private function getCompany($applicant): ?Company
+    {
+        if (!$applicant) return null;
+        $batches = $applicant->applicantBatches ?? $applicant->applicant_batches ?? null;
+        if ($batches && $batches->isNotEmpty()) {
+            return $batches->first()->batch?->company ?? null;
+        }
+        return null;
+    }
+
+    private function getApplicantName($applicant): string
+    {
+        if (!$applicant) return '';
+        $name = $applicant->full_name ?? trim("{$applicant->first_name} {$applicant->middle_name} {$applicant->last_name}");
+        return mb_strtoupper($name ?: '');
+    }
+
+    private function getCategoryName($applicant, ?Company $company): string
+    {
+        if ($company && $company->category && !empty($company->category->name)) {
+            return mb_strtoupper($company->category->name);
+        }
+
+        if ($applicant) {
+            $skill = $applicant->applied_position 
+                ?? $applicant->skill_category 
+                ?? $applicant->trade_or_occupation 
+                ?? 'WORKER';
+            return mb_strtoupper($skill);
+        }
+
+        return 'WORKER';
+    }
+
+    private function getCountry(?Company $company): string
+    {
+        if ($company && !empty($company->country)) {
+            return mb_strtoupper($company->country);
+        }
+        return 'JAPAN';
+    }
+
+    private function getForeignEmployer(?Company $company): string
+    {
+        if ($company) {
+            $name = $company->name_on_document ?? $company->name ?? null;
+            if ($name) {
+                return mb_strtoupper($name);
+            }
+        }
+        return 'N/A';
+    }
+
+    private function getForeignPrincipal(?Company $company): string
+    {
+        if ($company) {
+            $principal = $company->signatory_name 
+                ?? $company->contact_person 
+                ?? $company->name 
+                ?? null;
+            if ($principal) {
+                return mb_strtoupper($principal);
+            }
+        }
+        return 'N/A';
+    }
+
+    private function formatCertNo(?string $baseCertNo, int $index): string
+    {
+        if (empty($baseCertNo)) {
+            return '';
+        }
+
+        if (preg_match('/^(.*?)(\d+)$/', $baseCertNo, $matches)) {
+            $prefix = $matches[1];
+            $number = (int) $matches[2];
+            $length = strlen($matches[2]);
+
+            $nextNumber = $number + ($index - 1);
+            return $prefix . str_pad((string) $nextNumber, $length, '0', STR_PAD_LEFT);
+        }
+
+        return $baseCertNo;
     }
 }

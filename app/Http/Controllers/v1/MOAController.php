@@ -52,7 +52,7 @@ class MOAController extends Controller
         return 'Municipality of ' . Str::title($clean);
     }
 
-    public function generateMOA(int $internshipId): BinaryFileResponse
+    public function generateMOA($internshipId): BinaryFileResponse
     {
         $internship = ApplicantInternship::with([
             'applicant.guarantors',
