@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\MOAController;
+use App\Http\Controllers\v1\MOAController;
 use App\Http\Controllers\v1\ApplicantGuarantorController;
 use App\Http\Controllers\v1\InternshipController;
 use Illuminate\Support\Facades\Route;

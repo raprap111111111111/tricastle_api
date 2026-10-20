@@ -134,9 +134,9 @@ class Applicant extends Model
         'date_of_birth'            => 'date',
         'trade_test_date'          => 'date',
         'passport_expiry'          => 'date',
-        'passport_issue_date'      => 'date', // ✅ Added
-        'passport_received_at'     => 'date', // ✅ Added
-        'passport_expiration_date' => 'date', // ✅ Added
+        'passport_issue_date'      => 'date',
+        'passport_received_at'     => 'date',
+        'passport_expiration_date' => 'date',
         'final_listed_at'          => 'datetime',
         'rejected_at'              => 'datetime',
 
@@ -274,17 +274,11 @@ class Applicant extends Model
     // Relationships
     // ═══════════════════════════════════════════════════════
 
-    /**
-     * 🎯 FIX: Added passportIssuingOffice relationship (Fixes 500 error)
-     */
     public function passportIssuingOffice(): BelongsTo
     {
         return $this->belongsTo(PassportIssuingOffice::class, 'passport_issuing_office_id');
     }
 
-    /**
-     * Alias for passportIssuingOffice
-     */
     public function passportOffice(): BelongsTo
     {
         return $this->passportIssuingOffice();
@@ -354,6 +348,15 @@ class Applicant extends Model
     public function applicantBatches(): HasMany
     {
         return $this->hasMany(ApplicantBatch::class);
+    }
+
+    /**
+     * 🎯 FIX: Added snake_case alias to prevent RelationNotFoundException
+     * when eager loading or accessing $applicant->applicant_batches
+     */
+    public function applicant_batches(): HasMany
+    {
+        return $this->applicantBatches();
     }
 
     public function batches(): BelongsToMany

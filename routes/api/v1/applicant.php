@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\v1\ApplicantController;
+use App\Http\Controllers\v1\PdosCertificateController; // 👈 1. Added Import
 use Illuminate\Support\Facades\Route;
 
 // ─── Bulk Actions & Special Endpoints ───────────────────────────────────────
@@ -10,6 +11,10 @@ Route::post('applicants/check-duplicates', [ApplicantController::class, 'checkDu
 
 Route::post('applicants/export-insurance', [ApplicantController::class, 'exportInsurance'])
     ->name('applicants.export-insurance');
+
+// 👈 2. Added PDOS Batch Generation Route here
+Route::post('applicants/generate-pdos', [PdosCertificateController::class, 'generate'])
+    ->name('applicants.generate-pdos');
 
 // ─── Core CRUD ──────────────────────────────────────────────────────────────
 // Registers: index, store, show, update, destroy
