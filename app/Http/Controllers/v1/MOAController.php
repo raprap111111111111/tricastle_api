@@ -2,23 +2,39 @@
 
 namespace App\Http\Controllers\v1;
 
+use App\Enums\CivilStatus;
 use App\Http\Controllers\Controller;
 use App\Models\ApplicantInternship;
 use Carbon\Carbon;
 use Illuminate\Support\Str;
 use PhpOffice\PhpWord\TemplateProcessor;
+use ReflectionClass;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class MOAController extends Controller
 {
     /**
-     * ⚡ Smart Location Formatter
-     * - "Murcia"         → "Municipality of Murcia"
-     * - "Bacolod"        → "City of Bacolod"
-     * - "Bacolod City"   → "City of Bacolod"
-     * - "Talisay City"   → "City of Talisay"
-     * - "City of Manila" → "City of Manila"
-     * - "Municipality of Murcia" → kept as-is
+     * Helper to safely format Enum or String values
+     */
+    private function formatEnumOrString(mixed $value, string $default = ''): string
+    {
+        if ($value instanceof CivilStatus) {
+            return $value->label();
+        }
+        if ($value instanceof \BackedEnum) {
+            return (string) $value->value;
+        }
+        if ($value instanceof \UnitEnum) {
+            return $value->name;
+        }
+        return !empty($value) ? (string) $value : $default;
+    }
+
+    /**
+     * Smart Location Formatter
+     */
+    /**
+     * Smart Location Formatter
      */
     private function formatLocation(?string $rawLocation): string
     {
@@ -29,31 +45,70 @@ class MOAController extends Controller
 
         $lower = Str::lower($clean);
 
-        // Already fully written by the user
         if (Str::startsWith($lower, 'city of') || Str::startsWith($lower, 'municipality of')) {
             return Str::title($clean);
         }
 
-        // Known cities in Negros Occidental / common PH cities, or ends with "City"
         $knownCities = [
-            'bacolod', 'talisay', 'silay', 'bago', 'san carlos', 'kabankalan',
-            'victorias', 'cadiz', 'sagay', 'sipalay', 'himamaylan', 'escalante',
-            'manila', 'cebu', 'davao', 'iloilo', 'cagayan de oro',
+            'bacolod',
+            'talisay',
+            'silay',
+            'bago',
+            'san carlos',
+            'kabankalan',
+            'victorias',
+            'cadiz',
+            'sagay',
+            'sipalay',
+            'himamaylan',
+            'escalante',
+            'manila',
+            'cebu',
+            'davao',
+            'iloilo',
+            'cagayan de oro',
         ];
 
-        $nameWithoutCity = trim(Str::ireplace('city', '', $clean));
+        // 🎯 FIX: Use native PHP str_ireplace instead of non-existent Str::ireplace
+        $nameWithoutCity = trim(str_ireplace('city', '', $clean));
         $isCity = Str::endsWith($lower, 'city') || in_array(Str::lower($nameWithoutCity), $knownCities, true);
 
         if ($isCity) {
             return 'City of ' . Str::title($nameWithoutCity);
         }
 
-        // Default: Municipality
         return 'Municipality of ' . Str::title($clean);
+    }
+
+    /**
+     * Clean split XML tags inside {{...}} in tempDocumentMainPart
+     */
+    private function sanitizeMainDocumentXml(TemplateProcessor $templateProcessor): void
+    {
+        $reflection = new ReflectionClass($templateProcessor);
+        if (!$reflection->hasProperty('tempDocumentMainPart')) {
+            return;
+        }
+
+        $property = $reflection->getProperty('tempDocumentMainPart');
+        $property->setAccessible(true);
+        $xml = $property->getValue($templateProcessor);
+
+        if (is_string($xml)) {
+            $xml = preg_replace('/\{\s*<[^>]+>\s*\{/', '{{', $xml);
+            $xml = preg_replace('/\}\s*<[^>]+>\s*\}/', '}}', $xml);
+
+            $xml = preg_replace_callback('/\{\{(.*?)\}\}/s', function ($matches) {
+                return '{{' . strip_tags($matches[1]) . '}}';
+            }, $xml);
+
+            $property->setValue($templateProcessor, $xml);
+        }
     }
 
     public function generateMOA($internshipId): BinaryFileResponse
     {
+        // 🎯 Support both Internship ID and Applicant ID lookup
         $internship = ApplicantInternship::with([
             'applicant.guarantors',
             'receivingCompany',
@@ -61,7 +116,10 @@ class MOAController extends Controller
             'dispatchingCompany',
             'program',
             'batch',
-        ])->findOrFail($internshipId);
+        ])
+            ->where('id', $internshipId)
+            ->orWhere('applicant_id', $internshipId)
+            ->firstOrFail();
 
         $applicant  = $internship->applicant;
         $guarantors = $applicant->guarantors->sortBy('sequence')->values();
@@ -91,20 +149,36 @@ class MOAController extends Controller
             'Philippines',
         ])));
 
-        // ⚡ Dynamic City / Municipality label
         $rawCityInput      = $internship->municipality ?? $applicant->city ?? 'Murcia';
         $formattedLocation = $this->formatLocation($rawCityInput);
 
-        $templatePath = storage_path('app/templates/MOA_MASTER_TEMPLATE.docx');
-        if (! file_exists($templatePath)) {
-            abort(404, 'Template file MOA_MASTER_TEMPLATE.docx not found.');
+        // 🎯 Search both resources and storage template directories
+        $templatePaths = [
+            resource_path('templates/MOA_MASTER_TEMPLATE.docx'),
+            storage_path('app/templates/MOA_MASTER_TEMPLATE.docx'),
+            resource_path('templates/MOA_MASTER_TEMPLATE.doc'),
+        ];
+
+        $templatePath = null;
+        foreach ($templatePaths as $path) {
+            if (file_exists($path) && filesize($path) > 0) {
+                $templatePath = $path;
+                break;
+            }
+        }
+
+        if (!$templatePath) {
+            abort(404, 'Template file MOA_MASTER_TEMPLATE.docx not found in resources/templates or storage/app/templates.');
         }
 
         $templateProcessor = new TemplateProcessor($templatePath);
-        $templateProcessor->setMacroChars('{{', '}}'); // enables {{TAG}} syntax
+
+        // 🎯 Clean XML split tags before setting macros
+        $this->sanitizeMainDocumentXml($templateProcessor);
+        $templateProcessor->setMacroChars('{{', '}}');
 
         $formatCertIssued = function ($g) {
-            if (! $g) {
+            if (!$g) {
                 return '__________________';
             }
 
@@ -112,7 +186,7 @@ class MOAController extends Controller
                 ? Carbon::parse($g->residence_cert_issued_at)->format('m/d/Y')
                 : '';
 
-            if (! empty($g->residence_cert_place)) {
+            if (!empty($g->residence_cert_place)) {
                 $issued = trim($issued . ' - ' . Str::upper($g->residence_cert_place));
             }
 
@@ -125,17 +199,13 @@ class MOAController extends Controller
             'MONTH' => $agreementDate->format('F'),
             'YEAR'  => $agreementDate->format('Y'),
 
-            // ⚡ NEW: full location phrase for the template
-            // In your .docx use: at the {{LOCATION_FULL}}, Philippines
             'LOCATION_FULL' => $formattedLocation,
-
-            // Keep old CITY tag for backward compatibility (plain name only)
-            'CITY' => Str::title($rawCityInput),
+            'CITY'          => Str::title($rawCityInput),
 
             // Intern
             'I_NAME'             => Str::upper($applicant->full_name),
             'I_AGE'              => (string) $internAge,
-            'I_STAT'             => Str::title($applicant->civil_status ?? 'Single'),
+            'I_STAT'             => $this->formatEnumOrString($applicant->civil_status, 'Single'),
             'I_ADDR'             => $internAddress ?: '________________________________________________',
             'I_PASSPORT'         => $applicant->passport_number ?? '___________',
             'INTERN_PASS_ISSUED' => $applicant->passport_expiry
@@ -145,7 +215,7 @@ class MOAController extends Controller
             // Guarantor 1
             'G1_NAME'        => $g1 ? Str::upper($g1->full_name) : '________________________',
             'G1_AGE'         => (string) ($g1?->age ?: '___'),
-            'G1_STAT'        => Str::title($g1?->civil_status ?? 'Single'),
+            'G1_STAT'        => $this->formatEnumOrString($g1?->civil_status, 'Single'),
             'G1_ADDR'        => $g1?->address ?: $internAddress,
             'G1_CER'         => $g1?->residence_cert_no ?? '___________',
             'G1_CERT_ISSUED' => $formatCertIssued($g1),
@@ -153,7 +223,7 @@ class MOAController extends Controller
             // Guarantor 2
             'G2_NAME'        => $g2 ? Str::upper($g2->full_name) : '________________________',
             'G2_AGE'         => (string) ($g2?->age ?: '___'),
-            'G2_STAT'        => Str::title($g2?->civil_status ?? 'Single'),
+            'G2_STAT'        => $this->formatEnumOrString($g2?->civil_status, 'Single'),
             'G2_ADDR'        => $g2?->address ?: $internAddress,
             'G2_CER'         => $g2?->residence_cert_no ?? '___________',
             'G2_CERT_ISSUED' => $formatCertIssued($g2),
@@ -176,8 +246,8 @@ class MOAController extends Controller
                 ?? '________________________________',
             'JOB_DESCRIPTION' => Str::upper(
                 $internship->job_description
-                ?? $internship->program?->default_job_description
-                ?? 'FRAME WORKING'
+                    ?? $internship->program?->default_job_description
+                    ?? 'FRAME WORKING'
             ),
             'SCHEDULE_DAYS' => $internship->work_days ?? 'MONDAY to SATURDAY',
             'DAYS_OFF'      => $internship->day_off ?? 'SUNDAY',
