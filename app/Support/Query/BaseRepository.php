@@ -43,10 +43,19 @@ abstract class BaseRepository
             $params['order_dir'] ?? null,
         );
 
-        $offset  = (int) ($params['offset']  ?? 0);
-        $limit   = (int) ($params['limit']   ?? 10);
-        $total   = $query->count();
+        $limit = (int) ($params['limit'] ?? 10);
+        $total = $query->count();
 
+        // 🎯 FIX: Calculate offset from 'page' if 'offset' is not explicitly provided
+        if (isset($params['offset']) && $params['offset'] !== '') {
+            $offset = (int) $params['offset'];
+            $currentPage = $limit > 0 ? (int) floor($offset / $limit) + 1 : 1;
+        } else {
+            $currentPage = max(1, (int) ($params['page'] ?? 1));
+            $offset = ($currentPage - 1) * $limit;
+        }
+
+        // 🎯 FIX: Handle 'all' or high limit without skipping
         $records = $query->skip($offset)->take($limit)->get();
 
         // Wrap with resource if provided
@@ -54,8 +63,7 @@ abstract class BaseRepository
             $records = $resource::collection($records);
         }
 
-        $currentPage = $limit > 0 ? (int) floor($offset / $limit) + 1 : 1;
-        $lastPage    = $limit > 0 ? (int) ceil($total / $limit) : 1;
+        $lastPage = $limit > 0 ? (int) ceil($total / $limit) : 1;
 
         return [
             'records'      => $records,

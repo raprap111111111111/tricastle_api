@@ -24,6 +24,13 @@ class GetAllCompanyRequest extends FormRequest
             'order_dir' => $this->getValidOrderDir(),
             'limit'     => $this->getValidLimit(),
         ]);
+
+        // 🔍 DEBUG: See what the request is merging before validation
+        logger('[GetAllCompanyRequest@prepareForValidation] Request merged data:', [
+            'raw_input'   => $this->all(),
+            'merged_page' => $this->input('page'),
+            'merged_limit'=> $this->input('limit'),
+        ]);
     }
 
     public function rules(): array
@@ -31,6 +38,7 @@ class GetAllCompanyRequest extends FormRequest
         return [
             'search'      => ['nullable', 'string', 'min:1', 'max:100'],
             'offset'      => ['nullable', 'integer', 'min:0'],
+            'page'        => ['nullable', 'integer', 'min:1'], // <-- Make sure page is allowed!
             'limit'       => ['nullable', 'integer', 'min:1', 'max:' . self::MAX_LIMIT],
             'order_by'    => ['nullable', 'in:' . implode(',', $this->getValidColumns())],
             'order_dir'   => ['nullable', 'in:asc,desc'],
@@ -70,7 +78,16 @@ class GetAllCompanyRequest extends FormRequest
 
     protected function getValidLimit(): int
     {
-        return max(1, min(self::MAX_LIMIT, (int) $this->input('limit', self::DEFAULT_LIMIT)));
+        $limit = max(1, min(self::MAX_LIMIT, (int) $this->input('limit', self::DEFAULT_LIMIT)));
+
+        // 🔍 DEBUG: Verify if MAX_LIMIT (100) is cutting off your limit=1000 requests
+        logger('[GetAllCompanyRequest@getValidLimit] Resolved limit:', [
+            'requested_limit' => $this->input('limit'),
+            'resolved_limit'  => $limit,
+            'MAX_LIMIT'       => self::MAX_LIMIT
+        ]);
+
+        return $limit;
     }
 
     protected function getValidColumns(): array

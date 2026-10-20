@@ -32,10 +32,22 @@ class CompanyController extends Controller
     public function index(
         GetAllCompanyRequest $request
     ): JsonResponse {
+        // 🔍 DEBUG: Check what parameters the Request class actually validated
+        logger('[CompanyController@index] Validated Request Data:', $request->validated());
+        
+        // Uncomment the line below to halt execution and view raw data in Postman/Browser
+        // dd('DEBUG INDEX', $request->all(), $request->validated());
+
         $result = $this->repository->paginate(
             $request->validated(),
             CompanyResource::class
         );
+
+        // 🔍 DEBUG: Check the final paginated shape being returned
+        logger('[CompanyController@index] Paginated Result:', [
+            'total' => $result['total'] ?? null,
+            'count' => count($result['records'] ?? $result['data'] ?? []),
+        ]);
 
         return response()->json($result);
     }
