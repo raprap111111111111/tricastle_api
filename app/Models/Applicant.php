@@ -371,4 +371,9 @@ class Applicant extends Model
             ->withTimestamps()
             ->using(ApplicantBatch::class);
     }
+    
+    public function internships(): HasMany
+    {
+        return $this->hasMany(ApplicantInternship::class);
+    }
 }

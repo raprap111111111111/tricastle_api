@@ -105,6 +105,10 @@ class MoaGeneratorService
         $zip->close();
     }
 
+    /**
+     * Repair macros that Word has split across <w:r> / <w:t> runs.
+     * This is the #1 reason {{S_DAY}}, {{S_MONTH}}, {{S_YEAR}} stay as literal text.
+     */
     private function repairXmlRunSplitting(string $docxFilePath): void
     {
         $zip = new ZipArchive();
@@ -123,16 +127,32 @@ class MoaGeneratorService
                 continue;
             }
 
-            $repairedXml = preg_replace_callback('/\{\{(?:[^}]|<[^>]+>)*\}\}/s', function ($matches) {
-                return strip_tags($matches[0]);
-            }, $xml);
+            // 1. Collapse any tags that appear *inside* {{ ... }}
+            $repaired = preg_replace_callback(
+                '/\{\{(?:[^}]|<[^>]+>)*\}\}/s',
+                function (array $matches) {
+                    // Remove all XML tags that landed inside the macro
+                    return strip_tags($matches[0]);
+                },
+                $xml
+            );
 
-            if (is_string($repairedXml)) {
-                $repairedXml = str_replace(['{{{{', '}}}}'], ['{{', '}}'], $repairedXml);
+            if (! is_string($repaired)) {
+                continue;
             }
 
-            if (is_string($repairedXml) && $repairedXml !== $xml) {
-                $zip->addFromString($filename, $repairedXml);
+            // 2. Fix the common “{{  S_DAY  }}” / broken brace cases
+            $repaired = str_replace(
+                ['{{{{', '}}}}', '{{ {', '} }}', '{ {', '} }'],
+                ['{{',   '}}',   '{{',   '}}',  '{{',  '}}'],
+                $repaired
+            );
+
+            // 3. Normalize whitespace inside macros: {{ S_DAY }} → {{S_DAY}}
+            $repaired = preg_replace('/\{\{\s*([A-Z0-9_]+)\s*\}\}/', '{{$1}}', $repaired);
+
+            if ($repaired !== $xml) {
+                $zip->addFromString($filename, $repaired);
             }
         }
 

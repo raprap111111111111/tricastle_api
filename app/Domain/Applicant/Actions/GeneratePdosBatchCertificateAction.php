@@ -9,15 +9,24 @@ use ReflectionClass;
 
 class GeneratePdosBatchCertificateAction
 {
+    /** Static Foreign Principal (matches your official certificate layout) */
+    private const FOREIGN_PRINCIPAL = 'MULTI CONTRACTORS COOPERATIVE';
+
     public function execute(Collection $applicants, array $options = []): string
     {
         $templatePath = resource_path('templates/PDOS.docx');
 
-        if (!file_exists($templatePath)) {
-            throw new \RuntimeException("PDOS template not found at {$templatePath}");
+        if (! file_exists($templatePath)) {
+            // fallback if template was placed under storage
+            $alt = storage_path('app/templates/PDOS.docx');
+            if (file_exists($alt)) {
+                $templatePath = $alt;
+            } else {
+                throw new \RuntimeException("PDOS template not found at {$templatePath}");
+            }
         }
 
-        $formattedDate = isset($options['pdos_date']) && !empty($options['pdos_date'])
+        $formattedDate = ! empty($options['pdos_date'])
             ? date('F j, Y', strtotime($options['pdos_date']))
             : now()->format('F j, Y');
 
@@ -27,64 +36,74 @@ class GeneratePdosBatchCertificateAction
 
         $templateProcessor = new TemplateProcessor($templatePath);
 
-        // 🎯 SAFELY clean split XML tags inside {{...}} in document.xml ONLY
+        // Clean Word-split {{placeholders}} before macro setup
         $this->sanitizeMainDocumentXml($templateProcessor);
-
-        // Set macro delimiters to {{ and }}
         $templateProcessor->setMacroChars('{{', '}}');
 
-        $chunks = $applicants->chunk(2)->values();
-        $totalPages = $chunks->count();
+        $chunks     = $applicants->chunk(2)->values();
+        $totalPages = max(1, $chunks->count());
+
+        // If template has a cloneable block named "certificate_page", duplicate per pair.
+        // Safe no-op when the block is absent.
+        try {
+            $templateProcessor->cloneBlock('certificate_page', $totalPages, true, true);
+        } catch (\Throwable) {
+            // Template is a single page with _TOP / _BOTTOM placeholders only
+        }
 
         $certCounter = 0;
 
         for ($i = 0; $i < $totalPages; $i++) {
-            $pair = $chunks[$i]->values();
-            $top = $pair->get(0);
+            $pair   = $chunks->get($i)?->values() ?? collect();
+            $top    = $pair->get(0);
             $bottom = $pair->get(1);
 
-            // ─── TOP APPLICANT ───────────────────────────────────────────────
+            // Suffix used when cloneBlock adds #1, #2, ...
+            $s = $totalPages > 1 ? '#' . ($i + 1) : '';
+
+            // ─── TOP ────────────────────────────────────────────────────────
             if ($top) {
                 $certCounter++;
-                $topCompany = $this->getCompany($top);
+                $company = $this->getCompany($top);
 
-                $templateProcessor->setValue('APPLICANT_NAME_TOP', $this->getApplicantName($top));
-                $templateProcessor->setValue('COMPANY_CATEGORY_TOP', $this->getCategoryName($top, $topCompany));
-                $templateProcessor->setValue('COUNTRY_TOP', $this->getCountry($topCompany));
-                $templateProcessor->setValue('COMPANY_TOP', $this->getForeignEmployer($topCompany));
-                $templateProcessor->setValue('COMPANY_EMPLOYER_TOP', $this->getForeignPrincipal($topCompany));
+                $this->set($templateProcessor, 'APPLICANT_NAME_TOP' . $s, $this->getApplicantName($top));
+                $this->set($templateProcessor, 'COMPANY_CATEGORY_TOP' . $s, $this->getCategoryName($top, $company));
+                $this->set($templateProcessor, 'COUNTRY_TOP' . $s, $this->getCountry($company));
+                $this->set($templateProcessor, 'COMPANY_TOP' . $s, $this->getForeignEmployer($company));
+                // Static principal (and keep alias if old template still has it)
+                $this->set($templateProcessor, 'COMPANY_EMPLOYER_TOP' . $s, self::FOREIGN_PRINCIPAL);
+                $this->set($templateProcessor, 'FOREIGN_PRINCIPAL_TOP' . $s, self::FOREIGN_PRINCIPAL);
             } else {
-                $templateProcessor->setValue('APPLICANT_NAME_TOP', '');
-                $templateProcessor->setValue('COMPANY_CATEGORY_TOP', '');
-                $templateProcessor->setValue('COUNTRY_TOP', '');
-                $templateProcessor->setValue('COMPANY_TOP', '');
-                $templateProcessor->setValue('COMPANY_EMPLOYER_TOP', '');
+                foreach (['APPLICANT_NAME_TOP', 'COMPANY_CATEGORY_TOP', 'COUNTRY_TOP', 'COMPANY_TOP', 'COMPANY_EMPLOYER_TOP', 'FOREIGN_PRINCIPAL_TOP'] as $k) {
+                    $this->set($templateProcessor, $k . $s, '');
+                }
             }
 
-            // ─── BOTTOM APPLICANT ────────────────────────────────────────────
+            // ─── BOTTOM ─────────────────────────────────────────────────────
             if ($bottom) {
                 $certCounter++;
-                $bottomCompany = $this->getCompany($bottom);
+                $company = $this->getCompany($bottom);
 
-                $templateProcessor->setValue('APPLICANT_NAME_BOTTOM', $this->getApplicantName($bottom));
-                $templateProcessor->setValue('COMPANY_CATEGORY_BOTTOM', $this->getCategoryName($bottom, $bottomCompany));
-                $templateProcessor->setValue('COUNTRY_BOTTOM', $this->getCountry($bottomCompany));
-                $templateProcessor->setValue('COMPANY_BOTTOM', $this->getForeignEmployer($bottomCompany));
-                $templateProcessor->setValue('COMPANY_EMPLOYER_BOTTOM', $this->getForeignPrincipal($bottomCompany));
+                $this->set($templateProcessor, 'APPLICANT_NAME_BOTTOM' . $s, $this->getApplicantName($bottom));
+                $this->set($templateProcessor, 'COMPANY_CATEGORY_BOTTOM' . $s, $this->getCategoryName($bottom, $company));
+                $this->set($templateProcessor, 'COUNTRY_BOTTOM' . $s, $this->getCountry($company));
+                $this->set($templateProcessor, 'COMPANY_BOTTOM' . $s, $this->getForeignEmployer($company));
+                $this->set($templateProcessor, 'COMPANY_EMPLOYER_BOTTOM' . $s, self::FOREIGN_PRINCIPAL);
+                $this->set($templateProcessor, 'FOREIGN_PRINCIPAL_BOTTOM' . $s, self::FOREIGN_PRINCIPAL);
             } else {
-                $templateProcessor->setValue('APPLICANT_NAME_BOTTOM', '');
-                $templateProcessor->setValue('COMPANY_CATEGORY_BOTTOM', '');
-                $templateProcessor->setValue('COUNTRY_BOTTOM', '');
-                $templateProcessor->setValue('COMPANY_BOTTOM', '');
-                $templateProcessor->setValue('COMPANY_EMPLOYER_BOTTOM', '');
+                foreach (['APPLICANT_NAME_BOTTOM', 'COMPANY_CATEGORY_BOTTOM', 'COUNTRY_BOTTOM', 'COMPANY_BOTTOM', 'COMPANY_EMPLOYER_BOTTOM', 'FOREIGN_PRINCIPAL_BOTTOM'] as $k) {
+                    $this->set($templateProcessor, $k . $s, '');
+                }
             }
 
-            // ─── COMMON ──────────────────────────────────────────────────────
-            $templateProcessor->setValue('PDOS_DATE', $formattedDate);
+            // ─── SHARED (date + cert) ────────────────────────────────────────
+            $this->set($templateProcessor, 'PDOS_DATE' . $s, $formattedDate);
+            $this->set($templateProcessor, 'CERT_NO' . $s, $this->formatCertNo($baseCertNo, $certCounter));
+        }
 
-            // Format Certificate Number
-            $certNoFormatted = $this->formatCertNo($baseCertNo, $certCounter);
-            $templateProcessor->setValue('CERT_NO', $certNoFormatted);
+        // Also set unsuffixed keys so single-page templates always fill
+        if ($totalPages === 1) {
+            // already set above without suffix
         }
 
         $templateProcessor->saveAs($tempFile);
@@ -92,13 +111,20 @@ class GeneratePdosBatchCertificateAction
         return $tempFile;
     }
 
+    /** setValue wrapper — never passes null */
+    private function set(TemplateProcessor $tp, string $key, ?string $value): void
+    {
+        $tp->setValue($key, $value ?? '');
+    }
+
     /**
-     * Safely clean split XML tags inside {{...}} in tempDocumentMainPart ONLY
+     * Aggressively repair Word-split placeholders inside document.xml
+     * e.g. {{COM PANY_...}} or {{...}} broken across <w:t> runs
      */
     private function sanitizeMainDocumentXml(TemplateProcessor $templateProcessor): void
     {
         $reflection = new ReflectionClass($templateProcessor);
-        if (!$reflection->hasProperty('tempDocumentMainPart')) {
+        if (! $reflection->hasProperty('tempDocumentMainPart')) {
             return;
         }
 
@@ -106,102 +132,145 @@ class GeneratePdosBatchCertificateAction
         $property->setAccessible(true);
         $xml = $property->getValue($templateProcessor);
 
-        if (is_string($xml)) {
-            // 1. Join split braces: { <w:t> { </w:t> -> {{
-            $xml = preg_replace('/\{\s*<[^>]+>\s*\{/', '{{', $xml);
-            $xml = preg_replace('/\}\s*<[^>]+>\s*\}/', '}}', $xml);
-
-            // 2. Strip XML tags strictly inside {{...}} so PHPWord can match {{VAR}}
-            $xml = preg_replace_callback('/\{\{(.*?)\}\}/s', function ($matches) {
-                return '{{' . strip_tags($matches[1]) . '}}';
-            }, $xml);
-
-            $property->setValue($templateProcessor, $xml);
+        if (! is_string($xml)) {
+            return;
         }
+
+        // Join braces split across tags: { <w:t>{</w:t> → {{
+        $xml = preg_replace('/\{\s*(?:<[^>]+>\s*)+\{/', '{{', $xml);
+        $xml = preg_replace('/\}\s*(?:<[^>]+>\s*)+\}/', '}}', $xml);
+
+        // Strip any XML tags and whitespace inside {{ ... }}
+        $xml = preg_replace_callback('/\{\{(.*?)\}\}/s', function ($m) {
+            $inner = strip_tags($m[1]);
+            $inner = preg_replace('/\s+/', '', $inner); // COMPANY_ CATEGORY → COMPANY_CATEGORY
+            return '{{' . $inner . '}}';
+        }, $xml);
+
+        $property->setValue($templateProcessor, $xml);
     }
 
+    /**
+     * Resolve company from batch first, then current internship receiving company
+     */
     private function getCompany($applicant): ?Company
     {
-        if (!$applicant) return null;
+        if (! $applicant) {
+            return null;
+        }
+
+        // 1) Final-list / batch assignment
         $batches = $applicant->applicantBatches ?? $applicant->applicant_batches ?? null;
         if ($batches && $batches->isNotEmpty()) {
-            return $batches->first()->batch?->company ?? null;
+            $company = $batches->first()?->batch?->company;
+            if ($company) {
+                return $company;
+            }
         }
+
+        // 2) Current internship receiving company
+        $internship = null;
+        if (isset($applicant->internships)) {
+            $internship = $applicant->internships->firstWhere('is_current', true)
+                ?? $applicant->internships->first();
+        } elseif (method_exists($applicant, 'internships')) {
+            $internship = $applicant->internships()->where('is_current', true)->first()
+                ?? $applicant->internships()->latest('id')->first();
+        }
+
+        if ($internship) {
+            return $internship->receivingCompany
+                ?? $internship->acceptingCompany
+                ?? $internship->dispatchingCompany
+                ?? null;
+        }
+
         return null;
     }
 
     private function getApplicantName($applicant): string
     {
-        if (!$applicant) return '';
-        $name = $applicant->full_name ?? trim("{$applicant->first_name} {$applicant->middle_name} {$applicant->last_name}");
+        if (! $applicant) {
+            return '';
+        }
+
+        $name = $applicant->full_name
+            ?? trim(implode(' ', array_filter([
+                $applicant->first_name ?? null,
+                $applicant->middle_name ?? null,
+                $applicant->last_name ?? null,
+                $applicant->suffix ?? null,
+            ])));
+
         return mb_strtoupper($name ?: '');
     }
 
+    /**
+     * Skill / Occupation ← Company Category name
+     * fallback: applied_position / skill_category / trade_or_occupation
+     */
     private function getCategoryName($applicant, ?Company $company): string
     {
-        if ($company && $company->category && !empty($company->category->name)) {
-            return mb_strtoupper($company->category->name);
+        $categoryName = $company?->category?->name
+            ?? $company?->category_name
+            ?? null;
+
+        if (! empty($categoryName)) {
+            return mb_strtoupper(trim($categoryName));
         }
 
-        if ($applicant) {
-            $skill = $applicant->applied_position 
-                ?? $applicant->skill_category 
-                ?? $applicant->trade_or_occupation 
-                ?? 'WORKER';
-            return mb_strtoupper($skill);
-        }
+        $fallback = $applicant->applied_position
+            ?? $applicant->skill_category
+            ?? $applicant->trade_or_occupation
+            ?? $applicant->titp_occupation
+            ?? null;
 
-        return 'WORKER';
+        return mb_strtoupper(trim((string) ($fallback ?: 'WORKER')));
     }
 
     private function getCountry(?Company $company): string
     {
-        if ($company && !empty($company->country)) {
-            return mb_strtoupper($company->country);
-        }
-        return 'JAPAN';
+        $country = $company->country
+            ?? $company->destination_country
+            ?? $company->country_name
+            ?? null;
+
+        return mb_strtoupper(trim((string) ($country ?: 'JAPAN')));
     }
 
+    /** Foreign Employer ← company name on document */
     private function getForeignEmployer(?Company $company): string
     {
-        if ($company) {
-            $name = $company->name_on_document ?? $company->name ?? null;
-            if ($name) {
-                return mb_strtoupper($name);
-            }
+        if (! $company) {
+            return 'N/A';
         }
-        return 'N/A';
-    }
 
-    private function getForeignPrincipal(?Company $company): string
-    {
-        if ($company) {
-            $principal = $company->signatory_name 
-                ?? $company->contact_person 
-                ?? $company->name 
-                ?? null;
-            if ($principal) {
-                return mb_strtoupper($principal);
-            }
-        }
-        return 'N/A';
+        $name = $company->name_on_document
+            ?? $company->name
+            ?? $company->company_name
+            ?? null;
+
+        return ! empty($name) ? mb_strtoupper(trim($name)) : 'N/A';
     }
 
     private function formatCertNo(?string $baseCertNo, int $index): string
     {
-        if (empty($baseCertNo)) {
+        if ($baseCertNo === null || trim($baseCertNo) === '') {
             return '';
         }
 
-        if (preg_match('/^(.*?)(\d+)$/', $baseCertNo, $matches)) {
-            $prefix = $matches[1];
-            $number = (int) $matches[2];
-            $length = strlen($matches[2]);
+        $baseCertNo = trim($baseCertNo);
 
-            $nextNumber = $number + ($index - 1);
-            return $prefix . str_pad((string) $nextNumber, $length, '0', STR_PAD_LEFT);
+        if (preg_match('/^(.*?)(\d+)$/', $baseCertNo, $m)) {
+            $prefix = $m[1];
+            $number = (int) $m[2];
+            $len    = strlen($m[2]);
+            $next   = $number + ($index - 1);
+
+            return $prefix . str_pad((string) $next, $len, '0', STR_PAD_LEFT);
         }
 
-        return $baseCertNo;
+        // Non-numeric cert: same value on every cert, or append -N
+        return $index <= 1 ? $baseCertNo : $baseCertNo . '-' . $index;
     }
 }

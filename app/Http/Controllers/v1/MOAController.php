@@ -16,7 +16,7 @@ class MOAController extends Controller
     /**
      * Helper to safely format Enum or String values
      */
-    private function formatEnumOrString(mixed $value, string $default = ''): string
+    private function formatEnumOrString(mixed $value, string $default = 'Single'): string
     {
         if ($value instanceof CivilStatus) {
             return $value->label();
@@ -30,9 +30,6 @@ class MOAController extends Controller
         return !empty($value) ? (string) $value : $default;
     }
 
-    /**
-     * Smart Location Formatter
-     */
     /**
      * Smart Location Formatter
      */
@@ -50,26 +47,11 @@ class MOAController extends Controller
         }
 
         $knownCities = [
-            'bacolod',
-            'talisay',
-            'silay',
-            'bago',
-            'san carlos',
-            'kabankalan',
-            'victorias',
-            'cadiz',
-            'sagay',
-            'sipalay',
-            'himamaylan',
-            'escalante',
-            'manila',
-            'cebu',
-            'davao',
-            'iloilo',
-            'cagayan de oro',
+            'bacolod', 'talisay', 'silay', 'bago', 'san carlos', 'kabankalan',
+            'victorias', 'cadiz', 'sagay', 'sipalay', 'himamaylan', 'escalante',
+            'manila', 'cebu', 'davao', 'iloilo', 'cagayan de oro',
         ];
 
-        // 🎯 FIX: Use native PHP str_ireplace instead of non-existent Str::ireplace
         $nameWithoutCity = trim(str_ireplace('city', '', $clean));
         $isCity = Str::endsWith($lower, 'city') || in_array(Str::lower($nameWithoutCity), $knownCities, true);
 
@@ -119,6 +101,7 @@ class MOAController extends Controller
         ])
             ->where('id', $internshipId)
             ->orWhere('applicant_id', $internshipId)
+            ->latest('id')
             ->firstOrFail();
 
         $applicant  = $internship->applicant;
@@ -126,9 +109,14 @@ class MOAController extends Controller
         $g1         = $guarantors->get(0);
         $g2         = $guarantors->get(1);
 
+        // Date calculations
         $agreementDate = $internship->agreement_date
             ? Carbon::parse($internship->agreement_date)
             : now();
+
+        $sDay   = $agreementDate->format('jS');  // e.g. 21st
+        $sMonth = $agreementDate->format('F');   // e.g. October
+        $sYear  = $agreementDate->format('Y');   // e.g. 2026
 
         $startDate = $internship->contract_start
             ? Carbon::parse($internship->contract_start)
@@ -194,11 +182,20 @@ class MOAController extends Controller
         };
 
         $templateProcessor->setValues([
-            // Date parts
-            'DAY'   => $agreementDate->format('jS'),
-            'MONTH' => $agreementDate->format('F'),
-            'YEAR'  => $agreementDate->format('Y'),
+            // 🎯 ALL DATE TAG ALIASES (Fixes unreplaced {{S_DAY}}, {{S_MONTH}}, {{S_YEAR}})
+            'DAY'     => $sDay,
+            'DAY_S'   => $sDay,
+            'S_DAY'   => $sDay,
 
+            'MONTH'   => $sMonth,
+            'MONTH_S' => $sMonth,
+            'S_MONTH' => $sMonth,
+
+            'YEAR'    => $sYear,
+            'YEAR_S'  => $sYear,
+            'S_YEAR'  => $sYear,
+
+            // Locations
             'LOCATION_FULL' => $formattedLocation,
             'CITY'          => Str::title($rawCityInput),
 
@@ -247,7 +244,7 @@ class MOAController extends Controller
             'JOB_DESCRIPTION' => Str::upper(
                 $internship->job_description
                     ?? $internship->program?->default_job_description
-                    ?? 'FRAME WORKING'
+                    ?? 'ASSEMBLING REINFORCED ROD BAR WORK'
             ),
             'SCHEDULE_DAYS' => $internship->work_days ?? 'MONDAY to SATURDAY',
             'DAYS_OFF'      => $internship->day_off ?? 'SUNDAY',
