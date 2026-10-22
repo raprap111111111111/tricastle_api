@@ -61,7 +61,15 @@ class ApplicantResource extends JsonResource
             'quality_grade'   => $this->quality_grade,
             'passport_expiry' => $this->passport_expiry?->format('Y-m-d'),
 
-            // Lightweight office relation object representation
+            'passport_number'            => $this->passport_number,
+            'passport_issuing_office_id' => $this->passport_issuing_office_id,
+            'passport_issue_date'        => $this->passport_issue_date
+                ? ($this->passport_issue_date instanceof \Carbon\Carbon
+                    ? $this->passport_issue_date->format('Y-m-d')
+                    : \Carbon\Carbon::parse($this->passport_issue_date)->format('Y-m-d'))
+                : null,
+
+            // Lightweight office relation (keep as-is, still useful for labels)
             'passport_office' => $this->relationLoaded('passportOffice') && $this->passportOffice ? [
                 'id'      => $this->passportOffice->id,
                 'region'  => $this->passportOffice->region,

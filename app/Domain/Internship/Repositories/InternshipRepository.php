@@ -11,7 +11,8 @@ class InternshipRepository extends BaseRepository
     protected string $model = ApplicantInternship::class;
 
     protected array $relations = [
-        'applicant:id,applicant_code,first_name,middle_name,last_name,suffix,passport_number,status',
+        'applicant:id,applicant_code,first_name,middle_name,last_name,suffix,passport_number,passport_issuing_office_id,passport_issue_date,status',
+        'applicant.passportOffice:id,region,name,address',
         'batch:id,batch_number,name,country,is_active',
         'program:id,code,name,program_type',
         'receivingCompany:id,code,name',
@@ -75,7 +76,9 @@ class InternshipRepository extends BaseRepository
         }
 
         if ($request->filled('applicant_code')) {
-            $query->whereHas('applicant', fn (Builder $q) =>
+            $query->whereHas(
+                'applicant',
+                fn(Builder $q) =>
                 $q->where('applicant_code', $request->input('applicant_code'))
             );
         }
@@ -99,6 +102,7 @@ class InternshipRepository extends BaseRepository
     {
         return ApplicantInternship::with([
             'applicant.guarantors',
+            'applicant.passportOffice',
             'batch',
             'program.dispatchingCompany',
             'program.acceptingCompany',
