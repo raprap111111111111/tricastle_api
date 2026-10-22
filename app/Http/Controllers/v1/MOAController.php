@@ -264,7 +264,7 @@ class MOAController extends Controller
             'CE_DAY'    => $endDate ? $endDate->format('d') : '__',
 
             // Internship details
-            'PLACE_OF_INTERNSHIP' => $placeOfInternship,   // ← now it works
+            'PLACE_OF_INTERNSHIP' => $placeOfInternship,
 
             'JOB_DESCRIPTION' => Str::upper(
                 $internship->job_description
@@ -292,14 +292,29 @@ class MOAController extends Controller
             'MEAL'      => number_format($internship->meal_allowance_amount ?? 0),
         ]);
 
-        $safeLastName = Str::slug($applicant->last_name ?? 'intern');
-        $fileName     = sprintf('MOA_%s_%s.docx', $safeLastName, now()->format('Ymd_His'));
-        $outputPath   = tempnam(sys_get_temp_dir(), 'moa_dl_') . '.docx';
+        // 🎯 Format filename as: Surname First Name Middle Name.docx
+        $lastName   = trim($applicant->last_name ?? '');
+        $firstName  = trim($applicant->first_name ?? '');
+        $middleName = trim($applicant->middle_name ?? '');
 
+        $nameParts = array_filter([$lastName, $firstName, $middleName]);
+
+        if (!empty($nameParts)) {
+            $displayName = implode(' ', $nameParts);
+        } else {
+            $displayName = $applicant->full_name ?? 'Applicant_MOA';
+        }
+
+        // Clean invalid special characters for filenames
+        $cleanFileName = preg_replace('/[^\w\s,\.-]/u', '', $displayName);
+        $fileName      = sprintf('%s.docx', trim($cleanFileName));
+
+        $outputPath = tempnam(sys_get_temp_dir(), 'moa_dl_') . '.docx';
         $templateProcessor->saveAs($outputPath);
 
         return response()->download($outputPath, $fileName, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'Content-Type'                  => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'Access-Control-Expose-Headers' => 'Content-Disposition',
         ])->deleteFileAfterSend(true);
     }
 }
