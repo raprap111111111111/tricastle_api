@@ -2,24 +2,61 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
 use App\Models\PassportIssuingOffice;
+use Illuminate\Database\Seeder;
 
 class PassportIssuingOfficeSeeder extends Seeder
 {
     public function run(): void
     {
         $offices = [
-            // ─── LUZON ───────────────────────────────────────────────────────────
+            // ─── NCR / MANILA ────────────────────────────────────────────────
+            [
+                'region'  => 'NCR',
+                'name'    => 'DFA Aseana (Main Office / Consular Office Manila)',
+                'address' => 'ASEANA Business Park, Bradco Avenue corner Macapagal Boulevard, Brgy. Tambo, Parañaque City',
+            ],
+            [
+                'region'  => 'NCR',
+                'name'    => 'DFA NCR-East (SM Megamall)',
+                'address' => '7th Floor, Building C, SM Megamall, EDSA corner Julia Vargas Avenue, Mandaluyong City',
+            ],
+            [
+                'region'  => 'NCR',
+                'name'    => 'DFA NCR-West (SM City Manila)',
+                'address' => '5th Floor, SM City Manila, Natividad Almeda Lopez Street corner San Marcelino Street, Ermita, Manila',
+            ],
+            [
+                'region'  => 'NCR',
+                'name'    => 'DFA NCR-Northeast (Ali Mall)',
+                'address' => 'Level 2, Ali Mall Government Center, Araneta City, Cubao, Quezon City',
+            ],
+            [
+                'region'  => 'NCR',
+                'name'    => 'DFA NCR-South (Festival Mall Alabang)',
+                'address' => '3rd Level, West Wing, Festival Mall, Alabang, Muntinlupa City',
+            ],
+            [
+                'region'  => 'NCR',
+                'name'    => 'DFA NCR-Central (Robinsons Galleria)',
+                'address' => 'Lower Ground Floor, Lingkod Pinoy Center, Robinsons Galleria, West Lane, EDSA corner Ortigas Avenue, Quezon City',
+            ],
+            [
+                'region'  => 'NCR',
+                'name'    => 'DFA NCR-North (Robinsons Novaliches)',
+                'address' => '3rd Floor, Lingkod Pinoy Center Building B, Robinsons Novaliches, Quirino Highway, Barangay Pasong Putik, Quezon City',
+            ],
+
+            // ─── LUZON ───────────────────────────────────────────────────────
             [
                 'region'  => 'Luzon',
                 'name'    => 'DFA Regional Consular Office – Angeles',
-                'address' => '3rd Floor, Marquee Mall, Pulung Maragul, Angeles City',
+                'address' => 'Ground Level, Tech Hub 2, SM City Clark Expansion, Malabanias, Angeles City, Pampanga',
             ],
             [
                 'region'  => 'Luzon',
                 'name'    => 'DFA Regional Consular Office – Antipolo',
-                'address' => '3rd Floor, SM Cherry Foodarama, Marikina-Infanta Highway, Antipolo City, Rizal',
+                'address' => '3rd Floor, SM Cherry Foodarama / SM Center Antipolo, Marikina-Infanta Highway, Mayamot, Antipolo City, Rizal',
             ],
             [
                 'region'  => 'Luzon',
@@ -28,8 +65,13 @@ class PassportIssuingOfficeSeeder extends Seeder
             ],
             [
                 'region'  => 'Luzon',
-                'name'    => 'DFA Regional Consular Office – Batangas',
-                'address' => '2nd Floor, Robinsons Place Lipa, JP Laurel Highway, Mataas na Lupa, Lipa City',
+                'name'    => 'DFA Regional Consular Office – Balanga',
+                'address' => '3rd Level, The Bunker, Provincial Capitol Compound, Balanga City, Bataan',
+            ],
+            [
+                'region'  => 'Luzon',
+                'name'    => 'DFA Regional Consular Office – Batangas (Lipa)',
+                'address' => '2nd Floor, Robinsons Place Lipa, JP Laurel Highway, Mataas na Lupa, Lipa City, Batangas',
             ],
             [
                 'region'  => 'Luzon',
@@ -38,33 +80,43 @@ class PassportIssuingOfficeSeeder extends Seeder
             ],
             [
                 'region'  => 'Luzon',
-                'name'    => 'DFA Regional Consular Office – Cavite',
-                'address' => '2nd Floor, SM City Dasmariñas, Brgy. Sampaloc, Dasmariñas, Cavite',
+                'name'    => 'DFA Regional Consular Office – Candon',
+                'address' => 'Level 1, Candon City Arena, Bagani Campo, Bypass Road, Candon City, Ilocos Sur',
+            ],
+            [
+                'region'  => 'Luzon',
+                'name'    => 'DFA Regional Consular Office – Cavite (Dasmariñas)',
+                'address' => '2nd Floor, SM City Dasmariñas, Governor’s Drive corner Aguinaldo Highway, Brgy. Sampaloc, Dasmariñas City, Cavite',
             ],
             [
                 'region'  => 'Luzon',
                 'name'    => 'DFA Regional Consular Office – Ilocos Norte',
-                'address' => 'Robinsons Place Ilocos Norte, Brgy. San Francisco, San Nicolas, Ilocos Norte',
+                'address' => 'Robinsons Place Ilocos / Robinsons Ilocos, Valdez Center, Brgy. San Francisco, San Nicolas, Ilocos Norte',
             ],
             [
                 'region'  => 'Luzon',
                 'name'    => 'DFA Regional Consular Office – La Union',
-                'address' => '2nd Floor, Manna Mall, Marcos Highway corner Diversion Road, Pagdaraoan, City of San Fernando, La Union',
+                'address' => 'CSI Mall La Union / Manna Mall area, Brgy. Biday / Pagdaraoan, City of San Fernando, La Union',
             ],
             [
                 'region'  => 'Luzon',
                 'name'    => 'DFA Regional Consular Office – Legazpi',
-                'address' => '3rd Floor, Pacific Mall Legazpi, F. Imperial Street corner Circumferential Road, Brgy. Capantawan, Landco Business Park, Legazpi City',
+                'address' => '3rd Floor, Pacific Mall Legazpi, Landco Business Park, Legazpi City, Albay',
             ],
             [
                 'region'  => 'Luzon',
                 'name'    => 'DFA Regional Consular Office – Lucena',
-                'address' => '3rd Floor, Pacific Mall Lucena, M.L. Tagarao Street, Barangay III, Lucena City',
+                'address' => '3rd Floor, Pacific Mall Lucena, M.L. Tagarao Street, Barangay III, Lucena City, Quezon',
             ],
             [
                 'region'  => 'Luzon',
                 'name'    => 'DFA Regional Consular Office – Malolos',
                 'address' => '3rd Floor, Malolos Central Transport Terminal and Commercial Hub by Xentro Mall, Brgy. Bulihan, Malolos City, Bulacan',
+            ],
+            [
+                'region'  => 'Luzon',
+                'name'    => 'DFA Regional Consular Office – Olongapo',
+                'address' => 'Level 3, SM City Olongapo Central, Olongapo City, Zambales',
             ],
             [
                 'region'  => 'Luzon',
@@ -74,30 +126,35 @@ class PassportIssuingOfficeSeeder extends Seeder
             [
                 'region'  => 'Luzon',
                 'name'    => 'DFA Passport Service Program – Paniqui, Tarlac',
-                'address' => 'R-9, Waltermart, Paniqui, Tarlac',
+                'address' => 'Waltermart Paniqui, Paniqui, Tarlac',
             ],
             [
                 'region'  => 'Luzon',
                 'name'    => 'DFA Regional Consular Office – Puerto Princesa',
-                'address' => '2nd Level, Robinsons Place Palawan, National Highway, Brgy. San Manuel, Puerto Princesa City',
+                'address' => '2nd Level, Robinsons Place Palawan, National Highway, Brgy. San Manuel, Puerto Princesa City, Palawan',
             ],
             [
                 'region'  => 'Luzon',
                 'name'    => 'DFA Regional Consular Office – San Pablo',
-                'address' => '2nd Floor, SM City San Pablo, Riverina Residential & Commercial Estates, Maharlika Highway, Brgy. San Rafael, San Pablo City, Laguna',
+                'address' => '2nd Floor, SM City San Pablo, Maharlika Highway, Brgy. San Rafael, San Pablo City, Laguna',
             ],
             [
                 'region'  => 'Luzon',
                 'name'    => 'DFA Regional Consular Office – Santiago, Isabela',
-                'address' => 'Maharlika Highway, Brgy. Mabini, Santiago City, Isabela',
+                'address' => '3rd Floor, Robinsons Place Santiago / Maharlika Highway, Brgy. Mabini, Santiago City, Isabela',
             ],
             [
                 'region'  => 'Luzon',
                 'name'    => 'DFA Regional Consular Office – Tuguegarao',
-                'address' => 'Regional Government Center, Carig Sur, Tuguegarao City, Cagayan',
+                'address' => 'Ground Floor / Regional Government Center, Carig Sur, Tuguegarao City, Cagayan',
             ],
 
-            // ─── VISAYAS ─────────────────────────────────────────────────────────
+            // ─── VISAYAS ─────────────────────────────────────────────────────
+            [
+                'region'  => 'Visayas',
+                'name'    => 'DFA Regional Consular Office – Antique',
+                'address' => 'Lower Ground Floor / 3F, CityMall Antique or Robinsons Antique, National Highway, San Jose de Buenavista, Antique',
+            ],
             [
                 'region'  => 'Visayas',
                 'name'    => 'DFA Regional Consular Office – Bacolod',
@@ -106,17 +163,12 @@ class PassportIssuingOfficeSeeder extends Seeder
             [
                 'region'  => 'Visayas',
                 'name'    => 'DFA Regional Consular Office – Cebu',
-                'address' => '4th Level, Pacific Mall – Metro Mandaue, UN Avenue corner M.C. Briones Street, Brgy. Estancia, Mandaue City',
-            ],
-            [
-                'region'  => 'Visayas',
-                'name'    => 'Passport Service Program – Cebu POW (SM Seaside)',
-                'address' => 'SM Seaside, Mountain View Wing Atrium (by appointment only), Cebu City',
+                'address' => '3rd Floor, Robinsons Galleria Cebu, Gen. Maxilom Avenue Extension, Sergio Osmeña Jr. Blvd., Cebu City',
             ],
             [
                 'region'  => 'Visayas',
                 'name'    => 'DFA Regional Consular Office – Dumaguete',
-                'address' => '2nd Floor, Robinsons Place South Road, Calindagan, Dumaguete City',
+                'address' => '2nd Floor, Robinsons Place Dumaguete, South Road, Calindagan, Dumaguete City',
             ],
             [
                 'region'  => 'Visayas',
@@ -126,10 +178,15 @@ class PassportIssuingOfficeSeeder extends Seeder
             [
                 'region'  => 'Visayas',
                 'name'    => 'DFA Regional Consular Office – Tacloban',
-                'address' => '3rd Level, Robinsons North Tacloban, Brgy. 91, Abucay, Tacloban City',
+                'address' => '3rd Level, Robinsons North Tacloban, Brgy. 91 Abucay, Tacloban City',
+            ],
+            [
+                'region'  => 'Visayas',
+                'name'    => 'DFA Regional Consular Office – Tagbilaran',
+                'address' => '5th Floor, Alturas Mall / Island City Mall area, Tagbilaran City, Bohol',
             ],
 
-            // ─── MINDANAO ────────────────────────────────────────────────────────
+            // ─── MINDANAO ────────────────────────────────────────────────────
             [
                 'region'  => 'Mindanao',
                 'name'    => 'DFA Regional Consular Office – Butuan',
@@ -138,17 +195,17 @@ class PassportIssuingOfficeSeeder extends Seeder
             [
                 'region'  => 'Mindanao',
                 'name'    => 'DFA Regional Consular Office – Cagayan de Oro',
-                'address' => '5th Floor, SM CDO Downtown Premier, Claro M. Recto Avenue corner Osmeña Street, Cagayan de Oro City',
+                'address' => '5th Floor, BPO Tower, SM CDO Downtown Premier, Claro M. Recto Avenue corner Osmeña Street, Cagayan de Oro City',
             ],
             [
                 'region'  => 'Mindanao',
                 'name'    => 'DFA Regional Consular Office – Clarin',
-                'address' => 'Clarin Town Center, Clarin, Misamis Occidental',
+                'address' => 'Clarin Town Center, Ozamiz-Oroquieta National Highway, Clarin, Misamis Occidental',
             ],
             [
                 'region'  => 'Mindanao',
-                'name'    => 'DFA Regional Consular Office – Cotabato',
-                'address' => 'Alim Street, Kidapawan City, Cotabato',
+                'name'    => 'DFA Regional Consular Office – Cotabato (Kidapawan)',
+                'address' => 'Alim Street, Barangay Poblacion, Kidapawan City, Cotabato',
             ],
             [
                 'region'  => 'Mindanao',
@@ -159,6 +216,11 @@ class PassportIssuingOfficeSeeder extends Seeder
                 'region'  => 'Mindanao',
                 'name'    => 'DFA Regional Consular Office – General Santos',
                 'address' => 'Ground Floor, Robinsons Place GenSan, Jose Catolico Sr. Avenue, Lagao, General Santos City',
+            ],
+            [
+                'region'  => 'Mindanao',
+                'name'    => 'DFA Regional Consular Office – Pagadian',
+                'address' => '2nd Floor, C3 Mall (City Commercial Center), Rizal Avenue, Santiago District, Pagadian City, Zamboanga del Sur',
             ],
             [
                 'region'  => 'Mindanao',
@@ -174,7 +236,7 @@ class PassportIssuingOfficeSeeder extends Seeder
 
         foreach ($offices as $office) {
             PassportIssuingOffice::updateOrCreate(
-                ['name' => $office['name']], 
+                ['name' => $office['name']],
                 [
                     'region'    => $office['region'],
                     'address'   => $office['address'],
