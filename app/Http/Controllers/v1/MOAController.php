@@ -47,9 +47,23 @@ class MOAController extends Controller
         }
 
         $knownCities = [
-            'bacolod', 'talisay', 'silay', 'bago', 'san carlos', 'kabankalan',
-            'victorias', 'cadiz', 'sagay', 'sipalay', 'himamaylan', 'escalante',
-            'manila', 'cebu', 'davao', 'iloilo', 'cagayan de oro',
+            'bacolod',
+            'talisay',
+            'silay',
+            'bago',
+            'san carlos',
+            'kabankalan',
+            'victorias',
+            'cadiz',
+            'sagay',
+            'sipalay',
+            'himamaylan',
+            'escalante',
+            'manila',
+            'cebu',
+            'davao',
+            'iloilo',
+            'cagayan de oro',
         ];
 
         $nameWithoutCity = trim(str_ireplace('city', '', $clean));
@@ -181,8 +195,20 @@ class MOAController extends Controller
             return $issued !== '' ? $issued : '__________________';
         };
 
+        $company = $internship->receivingCompany;
+
+        $placeParts = array_filter([
+            $company?->prefecture,                              // Prefecture
+            $company?->city,                                    // City
+            $company?->site_address ?: $company?->address,      // Street Address
+        ]);
+
+        $placeOfInternship = !empty($placeParts)
+            ? implode(', ', $placeParts)
+            : ($internship->place_of_internship ?? '________________________________');
+
         $templateProcessor->setValues([
-            // 🎯 ALL DATE TAG ALIASES (Fixes unreplaced {{S_DAY}}, {{S_MONTH}}, {{S_YEAR}})
+            // 🎯 ALL DATE TAG ALIASES
             'DAY'     => $sDay,
             'DAY_S'   => $sDay,
             'S_DAY'   => $sDay,
@@ -238,9 +264,8 @@ class MOAController extends Controller
             'CE_DAY'    => $endDate ? $endDate->format('d') : '__',
 
             // Internship details
-            'PLACE_OF_INTERNSHIP' => $internship->place_of_internship
-                ?? $internship->receivingCompany?->address
-                ?? '________________________________',
+            'PLACE_OF_INTERNSHIP' => $placeOfInternship,   // ← now it works
+
             'JOB_DESCRIPTION' => Str::upper(
                 $internship->job_description
                     ?? $internship->program?->default_job_description
