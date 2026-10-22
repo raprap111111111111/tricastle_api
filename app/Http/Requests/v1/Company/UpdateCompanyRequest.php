@@ -9,19 +9,21 @@ class UpdateCompanyRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()->can(
-            'update',
-            $this->route('company')
-        );
+        // Simple and reliable – matches what the policy actually checks
+        return $this->user()->can('company.update');
     }
 
     public function rules(): array
     {
-        $companyId = $this->route('company')?->id;
+        $companyId = $this->route('company')?->id
+            ?? $this->route('company');   // fallback if still an ID
 
         return [
             'code' => [
-                'sometimes', 'required', 'string', 'max:100',
+                'sometimes',
+                'required',
+                'string',
+                'max:100',
                 Rule::unique('companies', 'code')->ignore($companyId),
             ],
             'name'           => ['sometimes', 'required', 'string', 'max:255'],
