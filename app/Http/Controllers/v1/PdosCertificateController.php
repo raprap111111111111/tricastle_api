@@ -2,127 +2,105 @@
 
 namespace App\Http\Controllers\v1;
 
+use App\Domain\Applicant\Actions\GeneratePdosBatchCertificateAction;
 use App\Http\Controllers\Controller;
 use App\Models\Applicant;
 use App\Models\ApplicantInternship;
-use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
-use PhpOffice\PhpWord\TemplateProcessor;
 
 class PdosCertificateController extends Controller
 {
     /**
-     * Generate 2-in-1 PDOS Certificate (.docx)
-     * Handles internship_id, applicant_id, or array payloads
+     * Generate PDOS Certificates (.docx)
+     * Handles single or multiple selected applicants (2 applicants per page).
      */
     public function generate(Request $request, $internshipId = null)
     {
-        // 1. Extract ID flexible from any common payload format
-        $id = $internshipId
-            ?? $request->input('internship_id')
+        // 1. Capture applicant or internship IDs flexibly from ANY request format
+        $rawApplicantIds = $request->input('applicant_ids')
+            ?? $request->input('ids')
+            ?? $request->input('selected_ids')
+            ?? $request->input('applicants')
             ?? $request->input('applicant_id')
             ?? $request->input('id')
-            ?? $request->input('applicant_ids.0')
-            ?? $request->input('internship_ids.0');
+            ?? $internshipId;
 
-        if (!$id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Applicant or Internship ID is required to generate PDOS.',
-            ], 422);
+        $rawInternshipIds = $request->input('internship_ids')
+            ?? $request->input('internships')
+            ?? $request->input('internship_id');
+
+        // Convert string arrays or single integers to clean arrays
+        $applicantIds = $this->normalizeIds($rawApplicantIds);
+        $internshipIds = $this->normalizeIds($rawInternshipIds);
+
+        $applicants = collect();
+
+        // 2. Fetch Applicants with valid relationships
+        if (! empty($applicantIds)) {
+            $fetched = Applicant::with([
+                'internships.receivingCompany.category',
+                'applicantBatches.batch.company.category',
+            ])->whereIn('id', $applicantIds)->get();
+
+            // Preserve table selection order from UI
+            $applicants = collect($applicantIds)->map(function ($id) use ($fetched) {
+                return $fetched->firstWhere('id', (int) $id);
+            })->filter()->values();
         }
 
-        // 2. Find Internship by Internship ID OR Applicant ID
-        $internship = ApplicantInternship::with([
-            'applicant',
-            'receivingCompany',
-            'acceptingCompany',
-            'dispatchingCompany',
-            'program',
-        ])
-            ->where('id', $id)
-            ->orWhere('applicant_id', $id)
-            ->latest()
-            ->first();
+        // Fallback: If passed IDs were Internship IDs
+        if ($applicants->isEmpty() && ! empty($internshipIds)) {
+            $internships = ApplicantInternship::with([
+                'applicant.internships.receivingCompany.category',
+                'applicant.applicantBatches.batch.company.category',
+            ])->whereIn('id', $internshipIds)->get();
 
-        // 3. Fallback: If no internship record exists yet, load Applicant directly
-        $applicant = $internship?->applicant ?? Applicant::find($id);
+            $applicants = $internships->map(fn ($i) => $i->applicant)->filter()->unique('id')->values();
+        }
 
-        if (!$applicant) {
+        if ($applicants->isEmpty()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Applicant record not found.',
+                'message' => 'No valid applicant records found.',
             ], 404);
         }
 
-        // 4. Populate Template Variables
-        $applicantName = Str::upper($applicant->full_name);
-
-        $skillCategory = Str::upper(
-            $internship?->job_description
-                ?? $internship?->program?->default_job_description
-                ?? $applicant->skill
-                ?? 'TECHNICAL INTERN'
-        );
-
-        $country = 'JAPAN'; // Static
-
-        $foreignEmployer = Str::upper(
-            $internship?->receivingCompany?->name_on_document
-                ?? $internship?->receivingCompany?->name
-                ?? 'N/A'
-        );
-
-        $pdosDate = ($request->input('pdos_date') || $internship?->pdos_seminar_date)
-            ? Carbon::parse($request->input('pdos_date') ?? $internship->pdos_seminar_date)->format('F d, Y')
-            : now()->format('F d, Y');
-
-        $certNo = $request->input('cert_no')
-            ?? $applicant->pdos_number
-            ?? ('TRI' . now()->format('Y') . '_' . str_pad((string) $applicant->id, 5, '0', STR_PAD_LEFT));
-
-        // 5. Load Word Template
-        // ✅ New path:
-        $templatePath = resource_path('templates/PDOS.docx');
-
-        if (!file_exists($templatePath)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Template file PDOS.docx not found in storage/app/templates/',
-            ], 404);
-        }
-
-        $templateProcessor = new TemplateProcessor($templatePath);
-        $templateProcessor->setMacroChars('{{', '}}');
-
-        // 6. Set Values for BOTH TOP and BOTTOM
-        $templateProcessor->setValues([
-            'APPLICANT_NAME_TOP'      => $applicantName,
-            'COMPANY_CATEGORY_TOP'    => $skillCategory,
-            'COUNTRY_TOP'             => $country,
-            'COMPANY_TOP'             => $foreignEmployer,
-
-            'APPLICANT_NAME_BOTTOM'   => $applicantName,
-            'COMPANY_CATEGORY_BOTTOM' => $skillCategory,
-            'COUNTRY_BOTTOM'          => $country,
-            'COMPANY_BOTTOM'          => $foreignEmployer,
-
-            'PDOS_DATE'               => $pdosDate,
-            'CERT_NO'                 => $certNo,
-            'PDOS_DATE_TOP'           => $pdosDate,
-            'PDOS_DATE_BOTTOM'        => $pdosDate,
-            'CERT_NO_TOP'             => $certNo,
-            'CERT_NO_BOTTOM'          => $certNo,
+        // 3. Delegate to Batch Action
+        $action = app(GeneratePdosBatchCertificateAction::class);
+        $outputPath = $action->execute($applicants, [
+            'pdos_date' => $request->input('pdos_date'),
+            'cert_no'   => $request->input('cert_no'),
         ]);
 
-        // 7. Save and Stream File Download
-        $fileName = sprintf('PDOS_%s_%s.docx', Str::slug($applicant->last_name ?? 'applicant'), now()->format('Ymd'));
-        $outputPath = tempnam(sys_get_temp_dir(), 'pdos_') . '.docx';
-        $templateProcessor->saveAs($outputPath);
+        $fileName = sprintf('PDOS_Certificates_%s.docx', now()->format('Ymd_His'));
 
         return response()->download($outputPath, $fileName, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'Content-Type'                  => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'Access-Control-Expose-Headers' => 'Content-Disposition',
         ])->deleteFileAfterSend(true);
+    }
+
+    private function normalizeIds(mixed $input): array
+    {
+        if (empty($input)) {
+            return [];
+        }
+
+        if (is_array($input)) {
+            return array_map('intval', array_filter($input));
+        }
+
+        if (is_string($input)) {
+            if (str_contains($input, ',')) {
+                return array_map('intval', array_filter(explode(',', $input)));
+            }
+            return [(int) trim($input)];
+        }
+
+        if (is_numeric($input)) {
+            return [(int) $input];
+        }
+
+        return [];
     }
 }

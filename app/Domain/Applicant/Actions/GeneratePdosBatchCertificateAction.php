@@ -5,25 +5,21 @@ namespace App\Domain\Applicant\Actions;
 use App\Models\Company;
 use Illuminate\Support\Collection;
 use PhpOffice\PhpWord\TemplateProcessor;
-use ReflectionClass;
+use ZipArchive;
 
 class GeneratePdosBatchCertificateAction
 {
-    /** Static Foreign Principal (matches your official certificate layout) */
     private const FOREIGN_PRINCIPAL = 'MULTI CONTRACTORS COOPERATIVE';
 
     public function execute(Collection $applicants, array $options = []): string
     {
         $templatePath = resource_path('templates/PDOS.docx');
-
         if (! file_exists($templatePath)) {
-            // fallback if template was placed under storage
             $alt = storage_path('app/templates/PDOS.docx');
-            if (file_exists($alt)) {
-                $templatePath = $alt;
-            } else {
+            if (! file_exists($alt)) {
                 throw new \RuntimeException("PDOS template not found at {$templatePath}");
             }
+            $templatePath = $alt;
         }
 
         $formattedDate = ! empty($options['pdos_date'])
@@ -32,157 +28,245 @@ class GeneratePdosBatchCertificateAction
 
         $baseCertNo = $options['cert_no'] ?? null;
 
-        $tempFile = tempnam(sys_get_temp_dir(), 'PDOS_BATCH_') . '.docx';
+        // Repair template XML to clean split tags and stray brackets like {{COMPANY_CATEGORY_TOP}}]
+        $cleanTemplatePath = $this->prepareCleanTemplate($templatePath);
 
-        $templateProcessor = new TemplateProcessor($templatePath);
-
-        // Clean Word-split {{placeholders}} before macro setup
-        $this->sanitizeMainDocumentXml($templateProcessor);
-        $templateProcessor->setMacroChars('{{', '}}');
-
-        $chunks     = $applicants->chunk(2)->values();
-        $totalPages = max(1, $chunks->count());
-
-        // If template has a cloneable block named "certificate_page", duplicate per pair.
-        // Safe no-op when the block is absent.
-        try {
-            $templateProcessor->cloneBlock('certificate_page', $totalPages, true, true);
-        } catch (\Throwable) {
-            // Template is a single page with _TOP / _BOTTOM placeholders only
-        }
-
+        // Chunk applicants: exactly 2 applicants per physical page
+        $chunks = $applicants->values()->chunk(2)->values();
+        $pageFiles = [];
         $certCounter = 0;
 
-        for ($i = 0; $i < $totalPages; $i++) {
-            $pair   = $chunks->get($i)?->values() ?? collect();
-            $top    = $pair->get(0);
-            $bottom = $pair->get(1);
+        foreach ($chunks as $pair) {
+            $pair = $pair->values();
+            $top = $pair->get(0);
+            $bottom = $pair->get(1); // null when count is odd (e.g. 3rd applicant alone on page 2)
 
-            // Suffix used when cloneBlock adds #1, #2, ...
-            $s = $totalPages > 1 ? '#' . ($i + 1) : '';
+            $pageFile = tempnam(sys_get_temp_dir(), 'PDOS_PAGE_') . '.docx';
+            $tp = new TemplateProcessor($cleanTemplatePath);
+            $tp->setMacroChars('{{', '}}');
 
-            // ─── TOP ────────────────────────────────────────────────────────
+            // ── TOP HALF ──────────────────────────────────────
             if ($top) {
                 $certCounter++;
                 $company = $this->getCompany($top);
-
-                $this->set($templateProcessor, 'APPLICANT_NAME_TOP' . $s, $this->getApplicantName($top));
-                $this->set($templateProcessor, 'COMPANY_CATEGORY_TOP' . $s, $this->getCategoryName($top, $company));
-                $this->set($templateProcessor, 'COUNTRY_TOP' . $s, $this->getCountry($company));
-                $this->set($templateProcessor, 'COMPANY_TOP' . $s, $this->getForeignEmployer($company));
-                // Static principal (and keep alias if old template still has it)
-                $this->set($templateProcessor, 'COMPANY_EMPLOYER_TOP' . $s, self::FOREIGN_PRINCIPAL);
-                $this->set($templateProcessor, 'FOREIGN_PRINCIPAL_TOP' . $s, self::FOREIGN_PRINCIPAL);
+                $this->fillHalf($tp, 'TOP', $top, $company);
+                $this->set($tp, 'CERT_NO_TOP', $this->formatCertNo($baseCertNo, $certCounter, $top));
             } else {
-                foreach (['APPLICANT_NAME_TOP', 'COMPANY_CATEGORY_TOP', 'COUNTRY_TOP', 'COMPANY_TOP', 'COMPANY_EMPLOYER_TOP', 'FOREIGN_PRINCIPAL_TOP'] as $k) {
-                    $this->set($templateProcessor, $k . $s, '');
-                }
+                $this->clearHalf($tp, 'TOP');
+                $this->set($tp, 'CERT_NO_TOP', '');
             }
 
-            // ─── BOTTOM ─────────────────────────────────────────────────────
+            // ── BOTTOM HALF ───────────────────────────────────
             if ($bottom) {
                 $certCounter++;
                 $company = $this->getCompany($bottom);
-
-                $this->set($templateProcessor, 'APPLICANT_NAME_BOTTOM' . $s, $this->getApplicantName($bottom));
-                $this->set($templateProcessor, 'COMPANY_CATEGORY_BOTTOM' . $s, $this->getCategoryName($bottom, $company));
-                $this->set($templateProcessor, 'COUNTRY_BOTTOM' . $s, $this->getCountry($company));
-                $this->set($templateProcessor, 'COMPANY_BOTTOM' . $s, $this->getForeignEmployer($company));
-                $this->set($templateProcessor, 'COMPANY_EMPLOYER_BOTTOM' . $s, self::FOREIGN_PRINCIPAL);
-                $this->set($templateProcessor, 'FOREIGN_PRINCIPAL_BOTTOM' . $s, self::FOREIGN_PRINCIPAL);
+                $this->fillHalf($tp, 'BOTTOM', $bottom, $company);
+                $this->set($tp, 'CERT_NO_BOTTOM', $this->formatCertNo($baseCertNo, $certCounter, $bottom));
             } else {
-                foreach (['APPLICANT_NAME_BOTTOM', 'COMPANY_CATEGORY_BOTTOM', 'COUNTRY_BOTTOM', 'COMPANY_BOTTOM', 'COMPANY_EMPLOYER_BOTTOM', 'FOREIGN_PRINCIPAL_BOTTOM'] as $k) {
-                    $this->set($templateProcessor, $k . $s, '');
-                }
+                // Odd applicant (e.g. 3rd person) -> Leave bottom half clean & empty
+                $this->clearHalf($tp, 'BOTTOM');
+                $this->set($tp, 'CERT_NO_BOTTOM', '');
             }
 
-            // ─── SHARED (date + cert) ────────────────────────────────────────
-            $this->set($templateProcessor, 'PDOS_DATE' . $s, $formattedDate);
-            $this->set($templateProcessor, 'CERT_NO' . $s, $this->formatCertNo($baseCertNo, $certCounter));
+            // Shared Keys & Dates
+            $this->set($tp, 'PDOS_DATE', $formattedDate);
+            $this->set($tp, 'PDOS_DATE_TOP', $formattedDate);
+            $this->set($tp, 'PDOS_DATE_BOTTOM', $bottom ? $formattedDate : '');
+            $this->set($tp, 'CERT_NO', $this->formatCertNo($baseCertNo, max(1, $certCounter - ($bottom ? 1 : 0)), $top));
+
+            $tp->saveAs($pageFile);
+            $pageFiles[] = $pageFile;
         }
 
-        // Also set unsuffixed keys so single-page templates always fill
-        if ($totalPages === 1) {
-            // already set above without suffix
+        @unlink($cleanTemplatePath);
+
+        // Return single page or merge multi-page DOCX
+        if (count($pageFiles) === 1) {
+            return $pageFiles[0];
         }
 
-        $templateProcessor->saveAs($tempFile);
+        $merged = tempnam(sys_get_temp_dir(), 'PDOS_BATCH_') . '.docx';
+        $this->mergeDocxPages($pageFiles, $merged);
 
-        return $tempFile;
+        foreach ($pageFiles as $f) {
+            @unlink($f);
+        }
+
+        return $merged;
     }
 
-    /** setValue wrapper — never passes null */
+    private function fillHalf(TemplateProcessor $tp, string $half, $applicant, ?Company $company): void
+    {
+        $this->set($tp, "APPLICANT_NAME_{$half}", $this->getApplicantName($applicant));
+        $this->set($tp, "COMPANY_CATEGORY_{$half}", $this->getCategoryName($applicant, $company));
+        $this->set($tp, "COUNTRY_{$half}", $this->getCountry($company));
+        $this->set($tp, "COMPANY_{$half}", $this->getForeignEmployer($company));
+        $this->set($tp, "COMPANY_EMPLOYER_{$half}", self::FOREIGN_PRINCIPAL);
+        $this->set($tp, "FOREIGN_PRINCIPAL_{$half}", self::FOREIGN_PRINCIPAL);
+    }
+
+    private function clearHalf(TemplateProcessor $tp, string $half): void
+    {
+        foreach ([
+            'APPLICANT_NAME', 'COMPANY_CATEGORY', 'COUNTRY', 'COMPANY',
+            'COMPANY_EMPLOYER', 'FOREIGN_PRINCIPAL',
+        ] as $k) {
+            $this->set($tp, "{$k}_{$half}", '');
+        }
+    }
+
     private function set(TemplateProcessor $tp, string $key, ?string $value): void
     {
         $tp->setValue($key, $value ?? '');
     }
 
     /**
-     * Aggressively repair Word-split placeholders inside document.xml
-     * e.g. {{COM PANY_...}} or {{...}} broken across <w:t> runs
+     * Repairs template XML before processing to fix split tags and stray brackets like {{COMPANY_CATEGORY_TOP}}]
      */
-    private function sanitizeMainDocumentXml(TemplateProcessor $templateProcessor): void
+    private function prepareCleanTemplate(string $templatePath): string
     {
-        $reflection = new ReflectionClass($templateProcessor);
-        if (! $reflection->hasProperty('tempDocumentMainPart')) {
-            return;
+        $cleanTemp = tempnam(sys_get_temp_dir(), 'PDOS_TPL_') . '.docx';
+        copy($templatePath, $cleanTemp);
+
+        $zip = new ZipArchive();
+        if ($zip->open($cleanTemp) === true) {
+            $xml = $zip->getFromName('word/document.xml');
+            if ($xml !== false) {
+                // 1. Join split braces like { <w:t>{</w:t> -> {{
+                $xml = preg_replace('/\{\s*(?:<[^>]+>\s*)*\{/', '{{', $xml);
+                $xml = preg_replace('/\}\s*(?:<[^>]+>\s*)*\}/', '}}', $xml);
+
+                // 2. Strip tags & whitespace inside {{ ... }}
+                $xml = preg_replace_callback('/\{\{(?:[^}]|<[^>]+>)*\}\}/s', function ($m) {
+                    $inner = strip_tags($m[0]);
+                    $inner = preg_replace('/[\]\}]+$/', '', $inner);
+                    $inner = preg_replace('/^[\[\{]+/', '', $inner);
+                    $inner = preg_replace('/\s+/', '', $inner);
+                    return '{{' . $inner . '}}';
+                }, $xml);
+
+                // 3. Fix stray brackets at end of tags
+                $xml = preg_replace('/\{\{([A-Z0-9_]+)[\}\]]+/', '{{\1}}', $xml);
+
+                $zip->addFromString('word/document.xml', $xml);
+            }
+            $zip->close();
         }
 
-        $property = $reflection->getProperty('tempDocumentMainPart');
-        $property->setAccessible(true);
-        $xml = $property->getValue($templateProcessor);
-
-        if (! is_string($xml)) {
-            return;
-        }
-
-        // Join braces split across tags: { <w:t>{</w:t> → {{
-        $xml = preg_replace('/\{\s*(?:<[^>]+>\s*)+\{/', '{{', $xml);
-        $xml = preg_replace('/\}\s*(?:<[^>]+>\s*)+\}/', '}}', $xml);
-
-        // Strip any XML tags and whitespace inside {{ ... }}
-        $xml = preg_replace_callback('/\{\{(.*?)\}\}/s', function ($m) {
-            $inner = strip_tags($m[1]);
-            $inner = preg_replace('/\s+/', '', $inner); // COMPANY_ CATEGORY → COMPANY_CATEGORY
-            return '{{' . $inner . '}}';
-        }, $xml);
-
-        $property->setValue($templateProcessor, $xml);
+        return $cleanTemp;
     }
 
     /**
-     * Resolve company from batch first, then current internship receiving company
+     * Merges multiple single-page DOCX files into one multi-page DOCX file
      */
+    private function mergeDocxPages(array $pageFiles, string $outputPath): void
+    {
+        if (empty($pageFiles)) {
+            throw new \RuntimeException('No PDOS pages to merge.');
+        }
+
+        copy($pageFiles[0], $outputPath);
+
+        if (count($pageFiles) === 1) {
+            return;
+        }
+
+        $baseZip = new ZipArchive();
+        if ($baseZip->open($outputPath) !== true) {
+            throw new \RuntimeException('Cannot open base PDOS docx for merge.');
+        }
+
+        $baseXml = $baseZip->getFromName('word/document.xml');
+        if ($baseXml === false) {
+            $baseZip->close();
+            throw new \RuntimeException('word/document.xml missing in base PDOS.');
+        }
+
+        if (! preg_match('/<w:body[^>]*>(.*?)<\/w:body>/s', $baseXml, $baseMatch)) {
+            $baseZip->close();
+            throw new \RuntimeException('Could not parse base document body.');
+        }
+
+        $fullBodyContent = $baseMatch[1];
+        $sectPr = '';
+
+        if (preg_match('/<w:sectPr\b.*?<\/w:sectPr>/s', $fullBodyContent, $sp)) {
+            $sectPr = $sp[0];
+            $bodyWithoutSectPr = preg_replace('/<w:sectPr\b.*?<\/w:sectPr>/s', '', $fullBodyContent);
+        } else {
+            $bodyWithoutSectPr = $fullBodyContent;
+        }
+
+        $mergedBody = $bodyWithoutSectPr;
+
+        for ($i = 1; $i < count($pageFiles); $i++) {
+            $zip = new ZipArchive();
+            if ($zip->open($pageFiles[$i]) !== true) {
+                continue;
+            }
+            $xml = $zip->getFromName('word/document.xml');
+            $zip->close();
+
+            if ($xml && preg_match('/<w:body[^>]*>(.*?)<\/w:body>/s', $xml, $m)) {
+                $pageContent = preg_replace('/<w:sectPr\b.*?<\/w:sectPr>/s', '', $m[1]);
+                $mergedBody .= '<w:p><w:r><w:br w:type="page"/></w:r></w:p>' . $pageContent;
+            }
+        }
+
+        $mergedBody .= $sectPr;
+
+        $newXml = preg_replace(
+            '/<w:body[^>]*>.*?<\/w:body>/s',
+            '<w:body>' . $mergedBody . '</w:body>',
+            $baseXml
+        );
+
+        $baseZip->addFromString('word/document.xml', $newXml);
+        $baseZip->close();
+    }
+
     private function getCompany($applicant): ?Company
     {
         if (! $applicant) {
             return null;
         }
 
-        // 1) Final-list / batch assignment
-        $batches = $applicant->applicantBatches ?? $applicant->applicant_batches ?? null;
-        if ($batches && $batches->isNotEmpty()) {
-            $company = $batches->first()?->batch?->company;
+        // 1. From internships
+        if (isset($applicant->internships) && $applicant->internships->isNotEmpty()) {
+            $internship = $applicant->internships->firstWhere('is_current', true)
+                ?? $applicant->internships->first();
+
+            $company = $internship?->receivingCompany
+                ?? $internship?->acceptingCompany
+                ?? $internship?->dispatchingCompany;
+
             if ($company) {
+                if (! $company->relationLoaded('category') && $company->category_id) {
+                    $company->load('category');
+                }
                 return $company;
             }
         }
 
-        // 2) Current internship receiving company
-        $internship = null;
-        if (isset($applicant->internships)) {
-            $internship = $applicant->internships->firstWhere('is_current', true)
-                ?? $applicant->internships->first();
-        } elseif (method_exists($applicant, 'internships')) {
-            $internship = $applicant->internships()->where('is_current', true)->first()
-                ?? $applicant->internships()->latest('id')->first();
-        }
-
-        if ($internship) {
-            return $internship->receivingCompany
-                ?? $internship->acceptingCompany
-                ?? $internship->dispatchingCompany
-                ?? null;
+        // 2. From applicant_batches deployment_company (e.g. ID "383" in JSON)
+        $batches = $applicant->applicantBatches ?? $applicant->applicant_batches ?? null;
+        if ($batches && $batches->isNotEmpty()) {
+            foreach ($batches as $ab) {
+                $companyId = $ab->deployment_company ?? $ab->deployment_company_id ?? null;
+                if ($companyId && is_numeric($companyId)) {
+                    $company = Company::with('category')->find((int) $companyId);
+                    if ($company) {
+                        return $company;
+                    }
+                }
+                if ($ab->batch && isset($ab->batch->company)) {
+                    $company = $ab->batch->company;
+                    if (! $company->relationLoaded('category') && $company->category_id) {
+                        $company->load('category');
+                    }
+                    return $company;
+                }
+            }
         }
 
         return null;
@@ -205,12 +289,9 @@ class GeneratePdosBatchCertificateAction
         return mb_strtoupper($name ?: '');
     }
 
-    /**
-     * Skill / Occupation ← Company Category name
-     * fallback: applied_position / skill_category / trade_or_occupation
-     */
     private function getCategoryName($applicant, ?Company $company): string
     {
+        // 🎯 1. Primary: Company Category Name (e.g. "FRAME WORKING", "CAREGIVING", etc.)
         $categoryName = $company?->category?->name
             ?? $company?->category_name
             ?? null;
@@ -219,26 +300,37 @@ class GeneratePdosBatchCertificateAction
             return mb_strtoupper(trim($categoryName));
         }
 
+        // 2. Secondary: Internship Job Description
+        $internship = null;
+        if (isset($applicant->internships) && $applicant->internships->isNotEmpty()) {
+            $internship = $applicant->internships->firstWhere('is_current', true)
+                ?? $applicant->internships->first();
+        }
+
+        if ($internship?->job_description) {
+            return mb_strtoupper(trim($internship->job_description));
+        }
+
+        // 3. Fallback: Applicant attributes
         $fallback = $applicant->applied_position
             ?? $applicant->skill_category
             ?? $applicant->trade_or_occupation
-            ?? $applicant->titp_occupation
-            ?? null;
+            ?? $applicant->skill
+            ?? 'TECHNICAL INTERN';
 
-        return mb_strtoupper(trim((string) ($fallback ?: 'WORKER')));
+        return mb_strtoupper(trim((string) $fallback));
     }
 
     private function getCountry(?Company $company): string
     {
-        $country = $company->country
-            ?? $company->destination_country
-            ?? $company->country_name
-            ?? null;
+        $country = $company?->country
+            ?? $company?->destination_country
+            ?? $company?->country_name
+            ?? 'JAPAN';
 
-        return mb_strtoupper(trim((string) ($country ?: 'JAPAN')));
+        return mb_strtoupper(trim((string) $country));
     }
 
-    /** Foreign Employer ← company name on document */
     private function getForeignEmployer(?Company $company): string
     {
         if (! $company) {
@@ -247,30 +339,35 @@ class GeneratePdosBatchCertificateAction
 
         $name = $company->name_on_document
             ?? $company->name
+            ?? $company->name_japanese
             ?? $company->company_name
             ?? null;
 
         return ! empty($name) ? mb_strtoupper(trim($name)) : 'N/A';
     }
 
-    private function formatCertNo(?string $baseCertNo, int $index): string
+    private function formatCertNo(?string $baseCertNo, int $index, $applicant = null): string
     {
+        if ($applicant && ! empty($applicant->pdos_number)) {
+            return trim((string) $applicant->pdos_number);
+        }
+
         if ($baseCertNo === null || trim($baseCertNo) === '') {
-            return '';
+            if ($applicant && isset($applicant->id)) {
+                return 'TRI' . now()->format('Y') . '_' . str_pad((string) $applicant->id, 5, '0', STR_PAD_LEFT);
+            }
+            return 'TRI' . now()->format('Y') . '_' . str_pad((string) $index, 5, '0', STR_PAD_LEFT);
         }
 
         $baseCertNo = trim($baseCertNo);
-
         if (preg_match('/^(.*?)(\d+)$/', $baseCertNo, $m)) {
             $prefix = $m[1];
             $number = (int) $m[2];
-            $len    = strlen($m[2]);
-            $next   = $number + ($index - 1);
-
+            $len = strlen($m[2]);
+            $next = $number + ($index - 1);
             return $prefix . str_pad((string) $next, $len, '0', STR_PAD_LEFT);
         }
 
-        // Non-numeric cert: same value on every cert, or append -N
         return $index <= 1 ? $baseCertNo : $baseCertNo . '-' . $index;
     }
 }
