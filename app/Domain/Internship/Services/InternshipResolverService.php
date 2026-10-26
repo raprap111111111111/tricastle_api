@@ -71,7 +71,7 @@ class InternshipResolverService
                 ? Carbon::parse($internship->contract_end)
                 : ($batch?->contract_end
                     ? Carbon::parse($batch->contract_end)
-                    : $contractStart->copy()->addYears($years)));
+                    : $contractStart->copy()->addYears($years)->subDay()));
 
         // ── Compensation ──────────────────────────────────────────────────────
         $stipend = (int) ($dto?->stipendAmount ?? $internship->stipend_amount ?? $batch?->stipend_amount ?? $program?->stipend_amount ?? 40000);
@@ -79,13 +79,34 @@ class InternshipResolverService
 
         // ── Job & Place ───────────────────────────────────────────────────────
         $job = $this->valueOrFallback(
-            $dto?->jobDescription ?? $internship->job_description ?? $batch?->default_job_description ?? $applicant->trade_or_occupation ?? $applicant->applied_position ?? $program?->default_job_description,
+            $dto?->jobDescription
+                ?? $internship->job_description
+                ?? $batch?->default_job_description
+                ?? $applicant->trade_or_occupation
+                ?? $applicant->applied_position
+                ?? $program?->default_job_description,
             'FRAME WORKING'
         );
 
+        // Build place of internship: "Aichi-ken, Toyota-shi, 1 Toyota-cho"
+        $place = $dto?->placeOfInternship
+            ?? $internship->place_of_internship
+            ?? $batch?->place_of_internship_override
+            ?? null;
+
+        if (empty($place) && $receiving) {
+            $pref = $this->formatJapanesePrefecture($receiving->prefecture);
+            $placeParts = array_filter([
+                $pref,
+                $receiving->city,
+                $receiving->site_address ?: $receiving->address,
+            ]);
+            $place = !empty($placeParts) ? implode(', ', $placeParts) : null;
+        }
+
         $place = $this->valueOrFallback(
-            $dto?->placeOfInternship ?? $internship->place_of_internship ?? $batch?->place_of_internship_override ?? $receiving?->site_address ?? $receiving?->address,
-            'Ibaraki-ken Itako-city Magarimatsunami 430-1 /Assigned Jobsites'
+            $place,
+            'Ibaraki-ken, Itako-city, Magarimatsunami 430-1 / Assigned Jobsites'
         );
 
         $municipality = $this->valueOrFallback(
@@ -402,5 +423,44 @@ class InternshipResolverService
         }
 
         return Str::upper('DFA ' . $name);
+    }
+
+    /**
+     * Convert Japanese prefecture names to proper Romaji suffix (-ken, -to, -fu)
+     * "Aichi Prefecture" → "Aichi-ken"
+     * "Tokyo"            → "Tokyo-to"
+     * "Osaka"            → "Osaka-fu"
+     * "Hokkaido"         → "Hokkaido"
+     */
+    private function formatJapanesePrefecture(?string $rawPrefecture): string
+    {
+        $clean = trim((string) $rawPrefecture);
+        if ($clean === '') {
+            return '';
+        }
+
+        // Strip "Prefecture", "Pref.", "Pref"
+        $clean = trim(preg_replace('/\s*(prefecture|pref\.|pref)$/i', '', $clean));
+        if ($clean === '') {
+            return '';
+        }
+
+        $lower = strtolower($clean);
+
+        // Already has proper suffix
+        if (preg_match('/-(ken|to|fu|do)$/i', $clean)) {
+            return $clean;
+        }
+        if (preg_match('/\s+(ken|to|fu|do)$/i', $clean, $m)) {
+            return preg_replace('/\s+(ken|to|fu|do)$/i', '-' . strtolower($m[1]), $clean);
+        }
+
+        return match ($lower) {
+            'tokyo', 'tōkyō', 'toukyou' => 'Tokyo-to',
+            'osaka', 'ōsaka'             => 'Osaka-fu',
+            'kyoto', 'kyōto'             => 'Kyoto-fu',
+            'hokkaido', 'hokkaidō'       => 'Hokkaido',
+            default                      => Str::title($clean) . '-ken',
+        };
     }
 }

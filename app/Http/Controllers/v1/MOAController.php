@@ -31,7 +31,46 @@ class MOAController extends Controller
     }
 
     /**
-     * Smart Location Formatter
+     * Convert Japanese prefecture names to proper Romaji suffix (-ken, -to, -fu)
+     * "Aichi Prefecture" → "Aichi-ken"
+     * "Tokyo"            → "Tokyo-to"
+     * "Osaka"            → "Osaka-fu"
+     * "Hokkaido"         → "Hokkaido"
+     */
+    private function formatJapanesePrefecture(?string $rawPrefecture): string
+    {
+        $clean = trim((string) $rawPrefecture);
+        if ($clean === '') {
+            return '';
+        }
+
+        // Strip "Prefecture", "Pref.", "Pref"
+        $clean = trim(preg_replace('/\s*(prefecture|pref\.|pref)$/i', '', $clean));
+        if ($clean === '') {
+            return '';
+        }
+
+        $lower = strtolower($clean);
+
+        // Already has proper suffix
+        if (preg_match('/-(ken|to|fu|do)$/i', $clean)) {
+            return $clean;
+        }
+        if (preg_match('/\s+(ken|to|fu|do)$/i', $clean, $m)) {
+            return preg_replace('/\s+(ken|to|fu|do)$/i', '-' . strtolower($m[1]), $clean);
+        }
+
+        return match ($lower) {
+            'tokyo', 'tōkyō', 'toukyou' => 'Tokyo-to',
+            'osaka', 'ōsaka'             => 'Osaka-fu',
+            'kyoto', 'kyōto'             => 'Kyoto-fu',
+            'hokkaido', 'hokkaidō'       => 'Hokkaido',
+            default                      => Str::title($clean) . '-ken',
+        };
+    }
+
+    /**
+     * Smart Location Formatter (Philippine MOA signing venue)
      */
     private function formatLocation(?string $rawLocation): string
     {
@@ -128,9 +167,9 @@ class MOAController extends Controller
             ? Carbon::parse($internship->agreement_date)
             : now();
 
-        $sDay   = $agreementDate->format('jS');  // e.g. 21st
-        $sMonth = $agreementDate->format('F');   // e.g. October
-        $sYear  = $agreementDate->format('Y');   // e.g. 2026
+        $sDay   = $agreementDate->format('jS');
+        $sMonth = $agreementDate->format('F');
+        $sYear  = $agreementDate->format('Y');
 
         $startDate = $internship->contract_start
             ? Carbon::parse($internship->contract_start)
@@ -200,10 +239,13 @@ class MOAController extends Controller
 
         $company = $internship->receivingCompany;
 
+        // 🎯 Format prefecture as -ken (e.g. "Aichi Prefecture" → "Aichi-ken")
+        $prefecture = $this->formatJapanesePrefecture($company?->prefecture);
+
         $placeParts = array_filter([
-            $company?->prefecture,                              // Prefecture
-            $company?->city,                                    // City
-            $company?->site_address ?: $company?->address,      // Street Address
+            $prefecture,                                           // Aichi-ken
+            $company?->city,                                       // City
+            $company?->site_address ?: $company?->address,         // Street
         ]);
 
         $placeOfInternship = !empty($placeParts)
@@ -295,7 +337,7 @@ class MOAController extends Controller
             'MEAL'      => number_format($internship->meal_allowance_amount ?? 0),
         ]);
 
-        // 🎯 Format filename as: Surname First Name Middle Name.docx
+        // Filename: Surname First Name Middle Name.docx
         $lastName   = trim($applicant->last_name ?? '');
         $firstName  = trim($applicant->first_name ?? '');
         $middleName = trim($applicant->middle_name ?? '');
@@ -308,7 +350,6 @@ class MOAController extends Controller
             $displayName = $applicant->full_name ?? 'Applicant_MOA';
         }
 
-        // Clean invalid special characters for filenames
         $cleanFileName = preg_replace('/[^\w\s,\.-]/u', '', $displayName);
         $fileName      = sprintf('%s.docx', trim($cleanFileName));
 
