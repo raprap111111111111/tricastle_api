@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\InternshipProgramType;
 use App\Enums\InternshipStatus;
 use App\Models\InternshipDocument;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -17,6 +18,18 @@ use Spatie\Activitylog\Support\LogOptions;
 class ApplicantInternship extends Model
 {
     use HasFactory, SoftDeletes, LogsActivity;
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $internship) {
+            // Auto-calculate contract_end if contract_start and contract_years are provided
+            if ($internship->contract_start && $internship->contract_years && ! $internship->contract_end) {
+                $start = Carbon::parse($internship->contract_start);
+                // Example: 2026-11-11 + 3 years - 1 day = 2029-11-10
+                $internship->contract_end = $start->copy()->addYears((int) $internship->contract_years)->subDay()->format('Y-m-d');
+            }
+        });
+    }
 
     protected $fillable = [
         'applicant_id',

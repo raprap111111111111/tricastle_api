@@ -8,15 +8,16 @@ use App\Models\ApplicantDocument;
 use App\Models\ApplicantInternship;
 use App\Models\DocumentType;
 use App\Models\InternshipDocument;
+use BackedEnum;
+use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use BackedEnum;
-use UnitEnum;
 use PhpOffice\PhpWord\Settings;
 use PhpOffice\PhpWord\TemplateProcessor;
 use RuntimeException;
 use Throwable;
+use UnitEnum;
 use ZipArchive;
 
 class MoaGeneratorService
@@ -246,8 +247,17 @@ class MoaGeneratorService
             $meal    = (float) ($payload['compensation']['meal_allowance'] ?? 0);
             $total   = (float) ($payload['compensation']['total'] ?? ($stipend + $meal));
 
+            // 🎯 Parse contract start date
+            $contractStart = $internship->contract_start ? Carbon::parse($internship->contract_start) : null;
+            $contractYears = (int) ($internship->contract_years ?? 3);
+
+            // 🎯 Auto-calculate contract end date if missing (e.g. 2026-11-11 + 3 years - 1 day = 2029-11-10)
+            $contractEnd = $internship->contract_end
+                ? Carbon::parse($internship->contract_end)
+                : ($contractStart ? $contractStart->copy()->addYears($contractYears)->subDay() : null);
+
             $templateProcessor->setValues([
-                // 🎯 Signing Date (supports DAY_S / MONTH_S / YEAR_S and S_DAY / S_MONTH / S_YEAR)
+                // 🎯 Signing Date
                 'DAY'     => $this->clean($payload['agreement_day_ordinal'] ?? '____'),
                 'MONTH'   => $this->clean($payload['agreement_month'] ?? '__________'),
                 'YEAR'    => $this->clean($payload['agreement_year'] ?? '____'),
@@ -284,13 +294,17 @@ class MoaGeneratorService
                 'G2_CERT_ISSUED' => $this->clean($payload['guarantor_2']['residence_cert_issued'] ?: '__________________'),
 
                 'RECEIVING_COMPANY' => $this->clean($payload['receiving_company'] ?? '________________________'),
-                'CON_YEAR'          => $this->clean($payload['contract_start_y'] ?? '____'),
-                'CON_MONTH'         => $this->clean($payload['contract_start_m'] ?? '__'),
-                'CON_DAY'           => $this->clean($payload['contract_start_d'] ?? '__'),
-                'CE_YEAR'           => $this->clean($payload['contract_end_y'] ?? '____'),
-                'CE_MONTH'          => $this->clean($payload['contract_end_m'] ?? '__'),
-                'CE_MON'            => $this->clean($payload['contract_end_m'] ?? '__'),
-                'CE_DAY'            => $this->clean($payload['contract_end_d'] ?? '__'),
+
+                // 🎯 Contract Start Date
+                'CON_YEAR'  => $this->clean($payload['contract_start_y'] ?? ($contractStart ? $contractStart->format('Y') : '____')),
+                'CON_MONTH' => $this->clean($payload['contract_start_m'] ?? ($contractStart ? $contractStart->format('m') : '__')),
+                'CON_DAY'   => $this->clean($payload['contract_start_d'] ?? ($contractStart ? $contractStart->format('d') : '__')),
+
+                // 🎯 Contract End Date (Supports CE_YEAR, CE_MON, CE_MONTH, CE_DAY)
+                'CE_YEAR'   => $this->clean($payload['contract_end_y'] ?? ($contractEnd ? $contractEnd->format('Y') : '____')),
+                'CE_MON'    => $this->clean($payload['contract_end_m'] ?? ($contractEnd ? $contractEnd->format('m') : '__')),
+                'CE_MONTH'  => $this->clean($payload['contract_end_m'] ?? ($contractEnd ? $contractEnd->format('m') : '__')),
+                'CE_DAY'    => $this->clean($payload['contract_end_d'] ?? ($contractEnd ? $contractEnd->format('d') : '__')),
 
                 'PLACE_OF_INTERNSHIP' => $this->clean($payload['place_of_internship'] ?? '________________________________'),
                 'JOB_DESCRIPTION'     => $this->clean($payload['job_description'] ?? '________________'),

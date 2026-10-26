@@ -136,9 +136,12 @@ class MOAController extends Controller
             ? Carbon::parse($internship->contract_start)
             : null;
 
+        // 🎯 Calculate end date from contract_start + contract_years if contract_end is null
+        $contractYears = (int) ($internship->contract_years ?? 3);
+
         $endDate = $internship->contract_end
             ? Carbon::parse($internship->contract_end)
-            : null;
+            : ($startDate ? $startDate->copy()->addYears($contractYears)->subDay() : null);
 
         $internAge = $applicant->date_of_birth
             ? Carbon::parse($applicant->date_of_birth)->age
