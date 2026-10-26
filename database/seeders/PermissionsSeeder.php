@@ -386,6 +386,15 @@ class PermissionsSeeder extends Seeder
             'applicant-batch.reject'            => 'Reject applicant from batch',
             'applicant-batch.withdraw'          => 'Withdraw applicant from batch',
             'applicant-batch.deploy'            => 'Deploy accepted applicant',
+
+            // ============================================
+            // 🛂 PASSPORT ISSUING OFFICES (DFA)
+            // ============================================
+            'passportIssuingOffice.viewAny' => 'View all DFA passport issuing offices',
+            'passportIssuingOffice.view'    => 'View single DFA passport issuing office',
+            'passportIssuingOffice.create'  => 'Create DFA passport issuing office',
+            'passportIssuingOffice.update'  => 'Update DFA passport issuing office',
+            'passportIssuingOffice.delete'  => 'Delete DFA passport issuing office',
         ];
 
         $this->command->info('🔑 Creating permissions...');
