@@ -31,6 +31,52 @@ class MOAController extends Controller
     }
 
     /**
+     * Cleans long DFA office names into a short clean format
+     * Example: "DFA Regional Consular Office – Baguio City" → "DFA BAGUIO"
+     */
+    private function formatDfaOfficeName(?string $rawName): string
+    {
+        if (empty($rawName)) {
+            return 'DFA BACOLOD';
+        }
+
+        $name = $rawName;
+
+        // 1. Remove parenthetical notes e.g. (Ali Mall)
+        $name = preg_replace('/\s*\(.*?\)/', '', $name);
+
+        // 2. Remove verbose phrases
+        $verbose = [
+            'Regional Consular Office',
+            'Passport Service Program',
+            'Consular Office',
+            'POW',
+        ];
+        foreach ($verbose as $term) {
+            $name = preg_replace('/' . preg_quote($term, '/') . '/i', '', $name);
+        }
+
+        // 3. Convert all dashes to space
+        $name = str_replace(['–', '—', '-'], ' ', $name);
+
+        // 4. Remove redundant "City" suffix to prevent Word tab-stop line overflow
+        $name = preg_replace('/\s+City$/i', '', trim($name));
+
+        // 5. Collapse multiple spaces
+        $name = trim(preg_replace('/\s+/', ' ', $name));
+
+        // 6. Remove leading "DFA" so we can re-add it cleanly
+        $name = preg_replace('/^DFA\s*/i', '', $name);
+        $name = trim($name);
+
+        if (empty($name)) {
+            return 'DFA BACOLOD';
+        }
+
+        return Str::upper('DFA ' . $name);
+    }
+
+    /**
      * Convert Japanese prefecture names to proper Romaji suffix (-ken, -to, -fu)
      * "Aichi Prefecture" → "Aichi-ken"
      * "Tokyo"            → "Tokyo-to"
@@ -86,23 +132,9 @@ class MOAController extends Controller
         }
 
         $knownCities = [
-            'bacolod',
-            'talisay',
-            'silay',
-            'bago',
-            'san carlos',
-            'kabankalan',
-            'victorias',
-            'cadiz',
-            'sagay',
-            'sipalay',
-            'himamaylan',
-            'escalante',
-            'manila',
-            'cebu',
-            'davao',
-            'iloilo',
-            'cagayan de oro',
+            'bacolod', 'talisay', 'silay', 'bago', 'san carlos', 'kabankalan',
+            'victorias', 'cadiz', 'sagay', 'sipalay', 'himamaylan', 'escalante',
+            'manila', 'cebu', 'davao', 'iloilo', 'cagayan de oro',
         ];
 
         $nameWithoutCity = trim(str_ireplace('city', '', $clean));
@@ -143,9 +175,10 @@ class MOAController extends Controller
 
     public function generateMOA($internshipId): BinaryFileResponse
     {
-        // 🎯 Support both Internship ID and Applicant ID lookup
+        // 🎯 Load applicant.passportIssuingOffice relationship
         $internship = ApplicantInternship::with([
             'applicant.guarantors',
+            'applicant.passportIssuingOffice',
             'receivingCompany',
             'acceptingCompany',
             'dispatchingCompany',
@@ -175,7 +208,7 @@ class MOAController extends Controller
             ? Carbon::parse($internship->contract_start)
             : null;
 
-        // 🎯 Calculate end date from contract_start + contract_years if contract_end is null
+        // Calculate end date from contract_start + contract_years if contract_end is null
         $contractYears = (int) ($internship->contract_years ?? 3);
 
         $endDate = $internship->contract_end
@@ -196,7 +229,28 @@ class MOAController extends Controller
         $rawCityInput      = $internship->municipality ?? $applicant->city ?? 'Murcia';
         $formattedLocation = $this->formatLocation($rawCityInput);
 
-        // 🎯 Search both resources and storage template directories
+        // 🎯 Passport Issue Date + Office formatting
+        $passIssuedDate = $applicant->passport_issue_date
+            ? Carbon::parse($applicant->passport_issue_date)->format('m/d/Y')
+            : null;
+
+        $rawOfficeName = $applicant->passportIssuingOffice?->name
+            ?? $applicant->passport_issue_place
+            ?? null;
+
+        $passIssuedPlace = $this->formatDfaOfficeName($rawOfficeName);
+
+        if ($passIssuedDate && $passIssuedPlace) {
+            $internPassIssuedFormatted = "{$passIssuedDate} - {$passIssuedPlace}";
+        } elseif ($passIssuedDate) {
+            $internPassIssuedFormatted = $passIssuedDate;
+        } elseif ($passIssuedPlace) {
+            $internPassIssuedFormatted = $passIssuedPlace;
+        } else {
+            $internPassIssuedFormatted = '__________________';
+        }
+
+        // Search both resources and storage template directories
         $templatePaths = [
             resource_path('templates/MOA_MASTER_TEMPLATE.docx'),
             storage_path('app/templates/MOA_MASTER_TEMPLATE.docx'),
@@ -217,7 +271,7 @@ class MOAController extends Controller
 
         $templateProcessor = new TemplateProcessor($templatePath);
 
-        // 🎯 Clean XML split tags before setting macros
+        // Clean XML split tags before setting macros
         $this->sanitizeMainDocumentXml($templateProcessor);
         $templateProcessor->setMacroChars('{{', '}}');
 
@@ -239,13 +293,13 @@ class MOAController extends Controller
 
         $company = $internship->receivingCompany;
 
-        // 🎯 Format prefecture as -ken (e.g. "Aichi Prefecture" → "Aichi-ken")
+        // Format prefecture as -ken (e.g. "Aichi Prefecture" → "Aichi-ken")
         $prefecture = $this->formatJapanesePrefecture($company?->prefecture);
 
         $placeParts = array_filter([
-            $prefecture,                                           // Aichi-ken
-            $company?->city,                                       // City
-            $company?->site_address ?: $company?->address,         // Street
+            $prefecture,
+            $company?->city,
+            $company?->site_address ?: $company?->address,
         ]);
 
         $placeOfInternship = !empty($placeParts)
@@ -253,7 +307,7 @@ class MOAController extends Controller
             : ($internship->place_of_internship ?? '________________________________');
 
         $templateProcessor->setValues([
-            // 🎯 ALL DATE TAG ALIASES
+            // ALL DATE TAG ALIASES
             'DAY'     => $sDay,
             'DAY_S'   => $sDay,
             'S_DAY'   => $sDay,
@@ -276,9 +330,7 @@ class MOAController extends Controller
             'I_STAT'             => $this->formatEnumOrString($applicant->civil_status, 'Single'),
             'I_ADDR'             => $internAddress ?: '________________________________________________',
             'I_PASSPORT'         => $applicant->passport_number ?? '___________',
-            'INTERN_PASS_ISSUED' => $applicant->passport_expiry
-                ? Carbon::parse($applicant->passport_expiry)->format('m/d/Y') . ' - DFA BACOLOD'
-                : '__________________',
+            'INTERN_PASS_ISSUED' => $internPassIssuedFormatted,
 
             // Guarantor 1
             'G1_NAME'        => $g1 ? Str::upper($g1->full_name) : '________________________',
