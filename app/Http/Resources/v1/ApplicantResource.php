@@ -61,6 +61,13 @@ class ApplicantResource extends JsonResource
             'quality_grade'   => $this->quality_grade,
             'passport_expiry' => $this->passport_expiry?->format('Y-m-d'),
 
+            // ✅ Address fields — always present for Final List table columns
+            'city'              => $this->city,
+            'province'          => $this->province,
+            'current_address'   => $this->current_address,
+            'permanent_address' => $this->permanent_address,
+            'postal_code'       => $this->postal_code,
+
             'passport_number'            => $this->passport_number,
             'passport_issuing_office_id' => $this->passport_issuing_office_id,
             'passport_issue_date'        => $this->passport_issue_date
@@ -131,11 +138,8 @@ class ApplicantResource extends JsonResource
                 'dominant_hand' => $this->dominant_hand,
                 'blood_type'    => $this->blood_type,
 
-                'current_address'   => $this->current_address,
-                'permanent_address' => $this->permanent_address,
-                'city'              => $this->city,
-                'province'          => $this->province,
-                'postal_code'       => $this->postal_code,
+                // address fields already in base — no need to repeat
+                // 'current_address', 'permanent_address', 'city', 'province', 'postal_code'
 
                 'passport_number'   => $this->passport_number,
                 'sss_number'        => $this->sss_number,
