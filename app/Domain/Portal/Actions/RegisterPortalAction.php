@@ -16,10 +16,13 @@ class RegisterPortalAction
 
     public function execute(array $data): array
     {
-        // 1. Instantiate the DTO expected by VerifyClaimAction
+        // 1. Instantiate DTO with all fields (including middle_name, email, password)
         $dto = new VerifyClaimDTO(
             firstName: $data['first_name'],
+            middleName: $data['middle_name'] ?? null,
             lastName: $data['last_name'],
+            email: $data['email'],
+            password: $data['password'],
             dateOfBirth: $data['date_of_birth']
         );
 
@@ -34,10 +37,17 @@ class RegisterPortalAction
             throw new Exception("An account already exists for this applicant record.");
         }
 
+        // Clean full name assembly (no extra spaces if middle_name is empty)
+        $fullName = implode(' ', array_filter([
+            $data['first_name'],
+            $data['middle_name'] ?? null,
+            $data['last_name']
+        ]));
+
         // 3. Perform atomic registration
-        return DB::transaction(function () use ($data, $verification) {
+        return DB::transaction(function () use ($data, $verification, $fullName) {
             $user = User::create([
-                'name' => trim($data['first_name'] . ' ' . $data['last_name']),
+                'name' => $fullName,
                 'email' => $data['email'],
                 'password' => Hash::make($data['password']),
             ]);

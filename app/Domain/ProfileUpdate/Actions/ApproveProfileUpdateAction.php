@@ -26,7 +26,7 @@ class ApproveProfileUpdateAction
                     ])
                     ->toArray();
 
-                // 🎯 Normalize enums and dates before merging into database
+                // 🎯 Normalize enums, strings, and dates before merging into database
                 $payload = $this->sanitizePayload($payload);
 
                 // Merge proposed changes into applicant table
@@ -47,7 +47,14 @@ class ApproveProfileUpdateAction
      */
     protected function sanitizePayload(array $payload): array
     {
-        // 1. Dominant Hand: Map 'ambidextrous' -> 'both'
+        // 1. JLPT Level: Convert 'None', 'N/A', or invalid levels to null
+        if (array_key_exists('jlpt_level', $payload)) {
+            $jlpt = strtoupper(trim((string) ($payload['jlpt_level'] ?? '')));
+            $allowedJlpt = ['N1', 'N2', 'N3', 'N4', 'N5'];
+            $payload['jlpt_level'] = in_array($jlpt, $allowedJlpt, true) ? $jlpt : null;
+        }
+
+        // 2. Dominant Hand: Map 'ambidextrous' -> 'both'
         if (isset($payload['dominant_hand'])) {
             if ($payload['dominant_hand'] === 'ambidextrous') {
                 $payload['dominant_hand'] = 'both';
@@ -56,34 +63,34 @@ class ApproveProfileUpdateAction
             }
         }
 
-        // 2. Gender: Ensure valid lowercase enum ['male', 'female']
+        // 3. Gender: Ensure valid lowercase enum ['male', 'female']
         if (isset($payload['gender'])) {
             $gender = strtolower((string) $payload['gender']);
             $payload['gender'] = in_array($gender, ['male', 'female'], true) ? $gender : null;
         }
 
-        // 3. Civil Status: Ensure valid enum
+        // 4. Civil Status: Ensure valid enum
         if (isset($payload['civil_status'])) {
             $status  = strtolower((string) $payload['civil_status']);
             $allowed = ['single', 'married', 'widowed', 'separated', 'divorced'];
             $payload['civil_status'] = in_array($status, $allowed, true) ? $status : null;
         }
 
-        // 4. Blood Type: Sanitize and validate
-        if (isset($payload['blood_type']) && $payload['blood_type'] !== null) {
+        // 5. Blood Type: Strip Rh factors (+/-) to safely fit ENUM('A', 'B', 'AB', 'O')
+        if (array_key_exists('blood_type', $payload) && $payload['blood_type'] !== null) {
             $bt = strtoupper(trim((string) $payload['blood_type']));
-            $allowed = ['A', 'B', 'AB', 'O', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
-            
-            if (!in_array($bt, $allowed, true)) {
-                // Fallback: strip Rh factor if database enum has not been migrated yet
-                $plain = rtrim($bt, '+-');
-                $payload['blood_type'] = in_array($plain, ['A', 'B', 'AB', 'O'], true) ? $plain : null;
-            } else {
-                $payload['blood_type'] = $bt;
-            }
+            // Strip '+' and '-' to match standard database ENUM
+            $plain = str_replace(['+', '-'], '', $bt);
+            $payload['blood_type'] = in_array($plain, ['A', 'B', 'AB', 'O'], true) ? $plain : null;
         }
 
-        // 5. Format dates to 'YYYY-MM-DD' (removes '00:00:00' timestamps)
+        // 6. Facebook URL: Clean and cap length at 255 chars
+        if (isset($payload['facebook_url']) && is_string($payload['facebook_url'])) {
+            $url = trim($payload['facebook_url']);
+            $payload['facebook_url'] = $url !== '' ? substr($url, 0, 255) : null;
+        }
+
+        // 7. Format dates to 'YYYY-MM-DD' (removes '00:00:00' timestamps)
         $dateFields = [
             'date_of_birth',
             'passport_expiry',
