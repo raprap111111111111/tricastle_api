@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\v1\Portal;
 
+use App\Domain\Portal\Actions\VerifyClaimAction;
+use App\Domain\Portal\DTOs\VerifyClaimDTO;
 use App\Http\Controllers\Controller;
 use App\Models\Applicant;
 use App\Models\ApplicantLoginLog;
@@ -12,6 +14,10 @@ use Illuminate\Validation\ValidationException;
 
 class PortalAuthController extends Controller
 {
+    public function __construct(
+        private VerifyClaimAction $verifyClaimAction
+    ) {}
+
     private function passwordIsHashed(?string $password): bool
     {
         if (!$password) {
@@ -50,29 +56,31 @@ class PortalAuthController extends Controller
     {
         $data = $request->validate([
             'first_name'    => ['required', 'string', 'max:100'],
+            'middle_name'   => ['nullable', 'string', 'max:100'],
             'last_name'     => ['required', 'string', 'max:100'],
             'date_of_birth' => ['required', 'date'],
         ]);
 
-        $applicant = Applicant::query()
-            ->whereRaw('LOWER(TRIM(first_name)) = ?', [mb_strtolower(trim($data['first_name']))])
-            ->whereRaw('LOWER(TRIM(last_name)) = ?', [mb_strtolower(trim($data['last_name']))])
-            ->whereDate('date_of_birth', $data['date_of_birth'])
-            ->first();
+        $dto = new VerifyClaimDTO(
+            firstName: $data['first_name'],
+            lastName: $data['last_name'],
+            dateOfBirth: $data['date_of_birth'],
+            middleName: $data['middle_name'] ?? null
+        );
 
-        if (!$applicant) {
+        $result = $this->verifyClaimAction->execute($dto);
+
+        if (!$result) {
             return response()->json([
                 'verified' => false,
                 'message'  => 'Record not found. Ensure spelling and date of birth match your registration record.',
             ], 404);
         }
 
-        $hasAccount = ApplicantPortalAccount::where('applicant_id', $applicant->id)->exists();
-
         return response()->json([
             'verified'     => true,
-            'applicant_id' => $applicant->id,
-            'has_account'  => $hasAccount,
+            'applicant_id' => $result['applicant_id'],
+            'has_account'  => $result['has_account'],
         ]);
     }
 
@@ -83,34 +91,42 @@ class PortalAuthController extends Controller
     {
         $data = $request->validate([
             'first_name'            => ['required', 'string', 'max:100'],
+            'middle_name'           => ['nullable', 'string', 'max:100'],
             'last_name'             => ['required', 'string', 'max:100'],
             'date_of_birth'         => ['required', 'date'],
             'email'                 => ['required', 'email', 'unique:applicant_portal_accounts,email'],
             'password'              => ['required', 'string', 'min:8', 'confirmed'],
         ]);
 
-        $applicant = Applicant::query()
-            ->whereRaw('LOWER(TRIM(first_name)) = ?', [mb_strtolower(trim($data['first_name']))])
-            ->whereRaw('LOWER(TRIM(last_name)) = ?', [mb_strtolower(trim($data['last_name']))])
-            ->whereDate('date_of_birth', $data['date_of_birth'])
-            ->first();
+        $dto = new VerifyClaimDTO(
+            firstName: $data['first_name'],
+            lastName: $data['last_name'],
+            dateOfBirth: $data['date_of_birth'],
+            middleName: $data['middle_name'] ?? null,
+            email: $data['email'],
+            password: $data['password']
+        );
 
-        if (!$applicant) {
+        $verification = $this->verifyClaimAction->execute($dto);
+
+        if (!$verification) {
             throw ValidationException::withMessages([
                 'general' => 'Identity verification failed. Information does not match database record.',
             ]);
         }
 
-        if (ApplicantPortalAccount::where('applicant_id', $applicant->id)->exists()) {
+        if ($verification['has_account']) {
             throw ValidationException::withMessages([
                 'email' => 'An account already exists for this applicant. Please log in instead.',
             ]);
         }
 
+        $applicant = Applicant::withoutGlobalScopes()->find($verification['applicant_id']);
+
         $account = ApplicantPortalAccount::create([
             'applicant_id' => $applicant->id,
             'email'        => $data['email'],
-            'password'     => $data['password'], // hashed cast on model
+            'password'     => $data['password'],
             'status'       => 'active',
         ]);
 
