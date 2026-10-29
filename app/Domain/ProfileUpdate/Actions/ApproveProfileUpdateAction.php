@@ -53,7 +53,7 @@ class ApproveProfileUpdateAction
             return $str !== '' ? mb_substr($str, 0, $max) : null;
         };
 
-        // 1. Strings & URLs max character capping
+        // 1. Strings & URLs character capping (aligned with DB schema)
         $stringLimits = [
             'mobile'                         => 50,
             'phone'                          => 50,
@@ -71,8 +71,8 @@ class ApproveProfileUpdateAction
             'tin_number'                     => 50,
             'philhealth_number'              => 50,
             'pagibig_number'                 => 50,
-            'trade_or_occupation'            => 100,
-            'skill_category'                 => 100,
+            'trade_or_occupation'            => 150,
+            'skill_category'                 => 150,
             'titp_occupation'                => 100,
             'father_name'                    => 150,
             'mother_name'                    => 150,
@@ -118,14 +118,14 @@ class ApproveProfileUpdateAction
             }
         }
 
-        // 4. JLPT Level ('None', 'N/A' -> null)
+        // 4. JLPT Level
         if (array_key_exists('jlpt_level', $payload)) {
             $jlpt = strtoupper(trim((string) ($payload['jlpt_level'] ?? '')));
             $allowedJlpt = ['N1', 'N2', 'N3', 'N4', 'N5'];
             $payload['jlpt_level'] = in_array($jlpt, $allowedJlpt, true) ? $jlpt : null;
         }
 
-        // 5. Dominant Hand ('ambidextrous' -> 'both')
+        // 5. Dominant Hand
         if (isset($payload['dominant_hand'])) {
             $hand = strtolower(trim((string) $payload['dominant_hand']));
             if ($hand === 'ambidextrous') {
@@ -136,22 +136,30 @@ class ApproveProfileUpdateAction
         }
 
         // 6. Gender
-        if (isset($payload['gender'])) {
+        if (isset($payload['gender']) && $payload['gender'] !== null) {
             $gender = strtolower(trim((string) $payload['gender']));
-            $payload['gender'] = in_array($gender, ['male', 'female'], true) ? $gender : null;
+            if (in_array($gender, ['male', 'female'], true)) {
+                $payload['gender'] = $trimStr($gender, 20);
+            } else {
+                $payload['gender'] = null;
+            }
         }
 
         // 7. Civil Status
-        if (isset($payload['civil_status'])) {
+        if (isset($payload['civil_status']) && $payload['civil_status'] !== null) {
             $status  = strtolower(trim((string) $payload['civil_status']));
             $allowed = ['single', 'married', 'widowed', 'separated', 'divorced'];
-            $payload['civil_status'] = in_array($status, $allowed, true) ? $status : null;
+            if (in_array($status, $allowed, true)) {
+                $payload['civil_status'] = $trimStr($status, 30);
+            } else {
+                $payload['civil_status'] = null;
+            }
         }
 
-        // 8. Blood Type (Supports 'A', 'B', 'AB', 'O', 'A+', 'A-', etc.)
+        // 8. Blood Type
         if (array_key_exists('blood_type', $payload) && $payload['blood_type'] !== null) {
             $bt = strtoupper(trim((string) $payload['blood_type']));
-            $payload['blood_type'] = $bt !== '' ? mb_substr($bt, 0, 10) : null;
+            $payload['blood_type'] = $bt !== '' ? mb_substr($bt, 0, 20) : null;
         }
 
         // 9. Format Dates to 'YYYY-MM-DD'
