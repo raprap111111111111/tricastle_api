@@ -32,6 +32,7 @@ class Applicant extends Model
         'email',
         'phone',
         'mobile',
+        'facebook_url', 
         'date_of_birth',
         'birthplace',
         'gender',
@@ -365,6 +366,7 @@ class Applicant extends Model
             ->withPivot([
                 'id',
                 'status',
+                'batch_group_id', 
                 'assigned_at',
                 'processed_by',
             ])

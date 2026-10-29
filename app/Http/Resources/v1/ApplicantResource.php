@@ -128,6 +128,7 @@ class ApplicantResource extends JsonResource
 
                 'phone'              => $this->phone,
                 'mobile'             => $this->mobile,
+                'facebook_url'       => $this->facebook_url,
                 'date_of_birth'      => $this->date_of_birth?->format('Y-m-d'),
                 'gender'             => $this->gender,
                 'civil_status'       => $this->civil_status?->value ?? $this->civil_status,

@@ -24,6 +24,7 @@ class StoreApplicantRequest extends FormRequest
             'email'              => ['required', 'email', 'unique:applicants,email'],
             'phone'              => ['nullable', 'string', 'max:30'],
             'mobile'             => ['nullable', 'string', 'max:30'],
+            'facebook_url'       => ['nullable', 'url', 'max:255'],
             'date_of_birth'      => ['nullable', 'date', 'before:today'],
             'birthplace'         => ['nullable', 'string', 'max:150'],
             'gender'             => ['nullable', Rule::in(['male', 'female'])],

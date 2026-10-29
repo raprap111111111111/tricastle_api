@@ -20,6 +20,14 @@ class User extends Authenticatable
      */
     protected $guard_name = 'api';
 
+    /**
+     * Appended computed attributes to JSON responses
+     */
+    protected $appends = [
+        'full_name',
+        'name',
+    ];
+
     protected $fillable = [
         'first_name',
         'middle_name',
@@ -138,6 +146,16 @@ class User extends Authenticatable
                 ($this->middle_name ? "{$this->middle_name} " : '') .
                 "{$this->last_name}" .
                 ($this->suffix ? " {$this->suffix}" : ''))
+        );
+    }
+
+    /**
+     * Virtual 'name' accessor so $user->name works seamlessly everywhere
+     */
+    protected function name(): Attribute
+    {
+        return Attribute::make(
+            get: fn() => $this->full_name
         );
     }
 

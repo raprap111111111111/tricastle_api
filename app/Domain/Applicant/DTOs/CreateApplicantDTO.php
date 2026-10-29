@@ -22,6 +22,7 @@ final readonly class CreateApplicantDTO
         public CivilStatus|string|null $civilStatus       = null,
         public ?int                    $numberOfChildren  = 0,
         public ?string                 $nationality       = 'Filipino',
+        public ?string                 $facebookUrl       = null,
         
         // ── AIS / Trade Test ──────────────────────────────────────────────
         public ?string $appliedPosition       = null,

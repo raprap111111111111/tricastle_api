@@ -22,6 +22,7 @@ class ApplicantBatch extends Pivot
     protected $fillable = [
         'applicant_id',
         'batch_id',
+        'batch_group_id',
         'status',
         'assigned_at',
         'interview_date',
@@ -222,5 +223,11 @@ class ApplicantBatch extends Pivot
     public function hasDeploymentInfo(): bool
     {
         return $this->deployment_country !== null || $this->deployment_company !== null;
+    }
+
+
+    public function batchGroup(): BelongsTo
+    {
+        return $this->belongsTo(BatchGroup::class, 'batch_group_id');
     }
 }

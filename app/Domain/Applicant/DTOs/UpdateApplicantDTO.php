@@ -15,6 +15,7 @@ final readonly class UpdateApplicantDTO
         public ?string $email             = null,
         public ?string $phone             = null,
         public ?string $mobile            = null,
+        public ?string $facebookUrl       = null,
         public ?string $dateOfBirth       = null,
         public ?string $gender            = null,
         public CivilStatus|string|null $civilStatus       = null,

@@ -118,6 +118,11 @@ class Batch extends Model
         return $this->belongsTo(Company::class, 'receiving_company_id');
     }
 
+        public function groups(): HasMany
+    {
+        return $this->hasMany(BatchGroup::class);
+    }
+    
     public function acceptingCompany(): BelongsTo
     {
         return $this->belongsTo(Company::class, 'accepting_company_id');

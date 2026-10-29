@@ -30,6 +30,7 @@ class UpdateApplicantRequest extends FormRequest
             ],
             'phone'              => ['sometimes', 'nullable', 'string', 'max:30'],
             'mobile'             => ['sometimes', 'nullable', 'string', 'max:30'],
+            'facebook_url'       => ['sometimes', 'nullable', 'url', 'max:255'],
             'date_of_birth'      => ['sometimes', 'nullable', 'date', 'before:today'],
             'birthplace'         => ['sometimes', 'nullable', 'string', 'max:150'],
             'gender'             => ['sometimes', 'nullable', Rule::in(['male', 'female'])],

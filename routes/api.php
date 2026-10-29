@@ -1,5 +1,4 @@
 <?php
-// routes/api.php
 
 use App\Http\Controllers\v1\ApplicantDocumentController;
 use App\Http\Controllers\v1\AuthController;
@@ -15,7 +14,7 @@ Route::prefix('v1')->group(function () {
 
     Route::get('/health', HealthController::class)->name('health');
 
-    // Document streaming (blob preview/download via API)
+    // Document streaming (blob preview/download)
     Route::prefix('applicant-documents')->group(function () {
         Route::get('/{applicantDocument}/preview', [ApplicantDocumentController::class, 'preview'])
             ->whereNumber('applicantDocument');
@@ -38,12 +37,17 @@ Route::prefix('v1')->group(function () {
         Route::post('/register', [AuthController::class, 'register'])->name('auth.register');
     });
 
+    // ── 🔵 Applicant Portal ──────────────────────
+    // Loaded OUTSIDE auth:api because it has its own
+    // auth:applicant (Sanctum) guard inside the file.
+    require __DIR__ . '/api/v1/portal.php';
+
     // ============================================
-    // 🔒 PROTECTED ROUTES (Auth Required)
+    // 🔒 PROTECTED ROUTES (Staff — Passport auth:api)
     // ============================================
     Route::middleware('auth:api')->group(function () {
 
-        // Auth routes
+        // Staff auth
         Route::prefix('auth')->group(function () {
             Route::get('/profile', [AuthController::class, 'profile'])->name('auth.profile');
             Route::match(['post', 'put'], '/profile', [AuthController::class, 'updateProfile'])->name('auth.update-profile');
@@ -52,10 +56,17 @@ Route::prefix('v1')->group(function () {
             Route::put('/preferences', [AuthController::class, 'updatePreferences'])->name('auth.preferences');
         });
 
-        // ============================================
-        // 📦 AUTO-LOAD ALL MODULE ROUTES
-        // ============================================
+        // ── 🟠 Staff: Profile Update Requests ────
+        // Loaded INSIDE auth:api — inherits Passport guard.
+        require __DIR__ . '/api/v1/profile_update_requests.php';
+
+        // Auto-load any future staff-only route modules
         foreach (glob(__DIR__ . '/api/v1/*.php') as $routeFile) {
+            $basename = basename($routeFile);
+            // Skip files already loaded explicitly above
+            if (in_array($basename, ['portal.php', 'profile_update_requests.php'])) {
+                continue;
+            }
             require $routeFile;
         }
     });
