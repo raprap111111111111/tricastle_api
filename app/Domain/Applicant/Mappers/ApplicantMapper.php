@@ -58,7 +58,7 @@ class ApplicantMapper
             // ── Passport / IDs ────────────────────────────────────────────
             passportNumber:          $request->validated('passport_number'),
             passportExpiry:          $request->validated('passport_expiry'),
-            passportIssuingOfficeId: $request->validated('passport_issuing_office_id'), // Collected from form input
+            passportIssuingOfficeId: $request->validated('passport_issuing_office_id'),
             sssNumber:               $request->validated('sss_number'),
             tinNumber:               $request->validated('tin_number'),
             philhealthNumber:        $request->validated('philhealth_number'),
@@ -146,7 +146,7 @@ class ApplicantMapper
             tradeTestDate:         $request->validated('trade_test_date'),
             birthplace:            $request->validated('birthplace'),
             religion:              $request->validated('religion'),
-            englishProficiencyPct: $request->hasInput('english_proficiency_pct') 
+            englishProficiencyPct: $request->has('english_proficiency_pct') 
                                      ? (int) $request->validated('english_proficiency_pct') 
                                      : null,
 
@@ -166,7 +166,7 @@ class ApplicantMapper
             // ── Passport / IDs ────────────────────────────────────────────
             passportNumber:          $request->validated('passport_number'),
             passportExpiry:          $request->validated('passport_expiry'),
-            passportIssuingOfficeId: $request->validated('passport_issuing_office_id'), // Track changes during update
+            passportIssuingOfficeId: $request->validated('passport_issuing_office_id'),
             sssNumber:               $request->validated('sss_number'),
             tinNumber:               $request->validated('tin_number'),
             philhealthNumber:        $request->validated('philhealth_number'),
@@ -177,22 +177,22 @@ class ApplicantMapper
             tradeOrOccupation:       $request->validated('trade_or_occupation'),
 
             // ── Language ──────────────────────────────────────────────────
-            understandsBasicEnglish: $request->hasInput('understands_basic_english')
+            understandsBasicEnglish: $request->has('understands_basic_english')
                                          ? (bool) $request->validated('understands_basic_english')
                                          : null,
             jlptLevel:               $request->validated('jlpt_level'),
 
             // ── Japan Deployment ──────────────────────────────────────────
-            willingToBeDeployed:     $request->hasInput('willing_to_be_deployed')
+            willingToBeDeployed:     $request->has('willing_to_be_deployed')
                                          ? (bool) $request->validated('willing_to_be_deployed')
                                          : null,
-            japanDeploymentReady:    $request->hasInput('japan_deployment_ready')
+            japanDeploymentReady:    $request->has('japan_deployment_ready')
                                          ? (bool) $request->validated('japan_deployment_ready')
                                          : null,
             preferredWorkLocation:   $request->validated('preferred_work_location'),
 
             // ── Japan Experience ──────────────────────────────────────────
-            previousJapanExperience: $request->hasInput('previous_japan_experience')
+            previousJapanExperience: $request->has('previous_japan_experience')
                                          ? (bool) $request->validated('previous_japan_experience')
                                          : null,
             yearsJapanExperience:    $request->validated('years_japan_experience') !== null
@@ -200,11 +200,11 @@ class ApplicantMapper
                                          : null,
 
             // ── Certifications ────────────────────────────────────────────
-            hasTitpCertificate:      $request->hasInput('has_titp_certificate')
+            hasTitpCertificate:      $request->has('has_titp_certificate')
                                          ? (bool) $request->validated('has_titp_certificate')
                                          : null,
             titpOccupation:          $request->validated('titp_occupation'),
-            sswEligible:             $request->hasInput('ssw_eligible')
+            sswEligible:             $request->has('ssw_eligible')
                                          ? (bool) $request->validated('ssw_eligible')
                                          : null,
 
