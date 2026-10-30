@@ -55,6 +55,10 @@ class ApproveProfileUpdateAction
 
         // 1. Strings & URLs character capping (aligned with DB schema)
         $stringLimits = [
+            'first_name'                     => 100,
+            'middle_name'                    => 100,
+            'last_name'                      => 100,
+            'suffix'                         => 20,
             'mobile'                         => 50,
             'phone'                          => 50,
             'facebook_url'                  => 255,
@@ -82,7 +86,7 @@ class ApproveProfileUpdateAction
             'emergency_contact_phone'       => 50,
             'emergency_contact_address'     => 255,
         ];
-
+        
         foreach ($stringLimits as $field => $maxLen) {
             if (array_key_exists($field, $payload)) {
                 $payload[$field] = $trimStr($payload[$field], $maxLen);

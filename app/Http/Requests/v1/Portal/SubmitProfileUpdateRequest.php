@@ -14,6 +14,12 @@ class SubmitProfileUpdateRequest extends FormRequest
     public function rules(): array
     {
         return [
+            // ── Name Correction ───────────────────────────────────────────
+            'first_name'    => 'sometimes|required|string|max:100',
+            'middle_name'   => 'nullable|string|max:100',
+            'last_name'     => 'sometimes|required|string|max:100',
+            'suffix'        => 'nullable|string|max:20',
+
             // ── Core Personal & Contact ────────────────────────────────────
             'mobile'        => 'sometimes|required|string|max:30',
             'phone'         => 'nullable|string|max:30',
@@ -39,7 +45,7 @@ class SubmitProfileUpdateRequest extends FormRequest
             'dominant_hand' => 'nullable|string|in:left,right,both',
             'blood_type'    => 'nullable|string|max:10',
 
-            // ── Passport & Government IDs (Nullable: Optional for applicants)
+            // ── Passport & Government IDs ──────────────────────────────────
             'passport_number'     => 'nullable|string|max:50',
             'passport_expiry'     => 'nullable|date',
             'passport_issue_date' => 'nullable|date',
