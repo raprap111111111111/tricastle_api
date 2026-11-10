@@ -3,6 +3,7 @@
 namespace App\Domain\Applicant\Repositories;
 
 use App\Models\Applicant;
+use App\Models\Company;
 use App\Support\Query\BaseRepository;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -12,8 +13,8 @@ class ApplicantRepository extends BaseRepository
 
     protected array $relations = [
         'assignedStaff:id,name,full_name',
-        'passportOffice:id,region,name,address', // Eager-load issuing office metadata
-        'applicantBatches.batch:id,batch_number,name,country,is_active',
+        'passportOffice:id,region,name,address',
+        'applicantBatches.batch.company.category',
         'currentDocuments:id,applicant_id,document_type_id,file_path,file_name,status',
         'currentDocuments.documentType:id,code,name',
     ];
@@ -40,7 +41,7 @@ class ApplicantRepository extends BaseRepository
         'nationality',
         'quality_grade',
         'assigned_staff_id',
-        'passport_issuing_office_id', // Added Filter Option
+        'passport_issuing_office_id',
         'skill_category',
         'jlpt_level',
         'applied_position',
@@ -90,9 +91,9 @@ class ApplicantRepository extends BaseRepository
                 }
 
                 $q->orWhereRaw("CONCAT_WS(' ', first_name, last_name) LIKE ?", ['%' . $search . '%'])
-                  ->orWhereRaw("CONCAT_WS(' ', last_name, first_name) LIKE ?", ['%' . $search . '%'])
-                  ->orWhereRaw("CONCAT_WS(', ', last_name, first_name) LIKE ?", ['%' . $search . '%'])
-                  ->orWhereRaw("CONCAT_WS(' ', first_name, middle_name, last_name) LIKE ?", ['%' . $search . '%']);
+                    ->orWhereRaw("CONCAT_WS(' ', last_name, first_name) LIKE ?", ['%' . $search . '%'])
+                    ->orWhereRaw("CONCAT_WS(', ', last_name, first_name) LIKE ?", ['%' . $search . '%'])
+                    ->orWhereRaw("CONCAT_WS(' ', first_name, middle_name, last_name) LIKE ?", ['%' . $search . '%']);
             });
         }
 
@@ -116,9 +117,105 @@ class ApplicantRepository extends BaseRepository
             $query->where('passport_issuing_office_id', $request->input('passport_issuing_office_id'));
         }
 
-        if ($request->filled('batch_id')) {
+        if ($request->filled('batch_id') && $request->filled('group_id')) {
+            $query->whereHas('applicantBatches', function (Builder $q) use ($request) {
+                $q->where('batch_id', $request->input('batch_id'))
+                    ->where('batch_group_id', $request->input('group_id'));
+            });
+        } elseif ($request->filled('batch_id')) {
             $query->whereHas('applicantBatches', function (Builder $q) use ($request) {
                 $q->where('batch_id', $request->input('batch_id'));
+            });
+        } elseif ($request->filled('group_id')) {
+            $query->whereHas('applicantBatches', function (Builder $q) use ($request) {
+                $q->where('batch_group_id', $request->input('group_id'));
+            });
+        }
+
+        // ── Company Filter (checks applicantBatches by ID/Name/Code AND internships) ──
+        if ($request->filled('company_id')) {
+            $companyId   = $request->input('company_id');
+            $company     = Company::withTrashed()->find($companyId);
+            $companyName = $company?->name;
+            $companyCode = $company?->code;
+
+            $query->where(function (Builder $mainQuery) use ($companyId, $companyName, $companyCode) {
+                $mainQuery->whereHas('applicantBatches', function (Builder $q) use ($companyId, $companyName, $companyCode) {
+                    $q->where(function (Builder $sub) use ($companyId, $companyName, $companyCode) {
+                        $sub->where('deployment_company', (string) $companyId);
+
+                        if ($companyName) {
+                            $sub->orWhere('deployment_company', $companyName);
+                        }
+                        if ($companyCode) {
+                            $sub->orWhere('deployment_company', $companyCode);
+                        }
+                    })->orWhereHas('batch', function (Builder $bq) use ($companyId) {
+                        $bq->where('receiving_company_id', $companyId);
+                    });
+                })->orWhereHas('internships', function (Builder $iq) use ($companyId) {
+                    $iq->where('receiving_company_id', $companyId)
+                        ->orWhere('accepting_company_id', $companyId)
+                        ->orWhere('dispatching_company_id', $companyId);
+                });
+            });
+        }
+
+        // ── Company Category Filter ──
+        if ($request->filled('company_category_id')) {
+            $categoryId = $request->input('company_category_id');
+
+            // Query matching companies via Eloquent category relation (avoids unknown column errors)
+            $matchingCompanies = Company::withTrashed()
+                ->whereHas('category', function (Builder $cq) use ($categoryId) {
+                    $cq->where('id', $categoryId);
+                })
+                ->get(['id', 'name', 'code']);
+
+            $matchingCompanyIds   = $matchingCompanies->pluck('id')->map('strval')->toArray();
+            $matchingCompanyNames = $matchingCompanies->pluck('name')->filter()->toArray();
+            $matchingCompanyCodes = $matchingCompanies->pluck('code')->filter()->toArray();
+
+            $query->where(function (Builder $mainQuery) use ($categoryId, $matchingCompanyIds, $matchingCompanyNames, $matchingCompanyCodes) {
+                $mainQuery->whereHas('applicantBatches', function (Builder $q) use ($categoryId, $matchingCompanyIds, $matchingCompanyNames, $matchingCompanyCodes) {
+                    $q->where(function (Builder $sub) use ($matchingCompanyIds, $matchingCompanyNames, $matchingCompanyCodes) {
+                        $hasCondition = false;
+
+                        if (!empty($matchingCompanyIds)) {
+                            $sub->whereIn('deployment_company', $matchingCompanyIds);
+                            $hasCondition = true;
+                        }
+
+                        if (!empty($matchingCompanyNames)) {
+                            if ($hasCondition) {
+                                $sub->orWhereIn('deployment_company', $matchingCompanyNames);
+                            } else {
+                                $sub->whereIn('deployment_company', $matchingCompanyNames);
+                                $hasCondition = true;
+                            }
+                        }
+
+                        if (!empty($matchingCompanyCodes)) {
+                            if ($hasCondition) {
+                                $sub->orWhereIn('deployment_company', $matchingCompanyCodes);
+                            } else {
+                                $sub->whereIn('deployment_company', $matchingCompanyCodes);
+                            }
+                        }
+                    })->orWhereHas('batch.company.category', function (Builder $cq) use ($categoryId) {
+                        $cq->where('id', $categoryId);
+                    });
+                })->orWhereHas('internships', function (Builder $iq) use ($categoryId, $matchingCompanyIds) {
+                    $iq->whereHas('receivingCompany.category', function (Builder $cq) use ($categoryId) {
+                        $cq->where('id', $categoryId);
+                    });
+
+                    if (!empty($matchingCompanyIds)) {
+                        $iq->orWhereIn('receiving_company_id', $matchingCompanyIds)
+                            ->orWhereIn('accepting_company_id', $matchingCompanyIds)
+                            ->orWhereIn('dispatching_company_id', $matchingCompanyIds);
+                    }
+                });
             });
         }
 

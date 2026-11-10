@@ -30,6 +30,7 @@ class GetAllApplicantRequest extends FormRequest
 
     public function rules(): array
     {
+        // Validation rules for the request parameters
         return [
             'page'      => ['nullable', 'integer', 'min:1'],
             'search'    => ['nullable', 'string', 'min:1', 'max:100'],
@@ -46,11 +47,20 @@ class GetAllApplicantRequest extends FormRequest
             'nationality'                => ['nullable', 'string'],
             'quality_grade'              => ['nullable', 'in:A,B,C,D,F'],
             'assigned_staff_id'          => ['nullable', 'integer', 'exists:users,id'],
-            'passport_issuing_office_id' => ['nullable', 'integer', 'exists:passport_issuing_offices,id'], // Filter support
+            'passport_issuing_office_id' => ['nullable', 'integer', 'exists:passport_issuing_offices,id'],
             'batch_id'                   => ['nullable', 'integer', 'exists:batches,id'],
+            'group_id'            => ['nullable', 'integer', 'exists:batch_groups,id'],
+            'company_id'          => ['nullable', 'integer'],
+            'company_category_id' => ['nullable', 'integer'],
             'city'                       => ['nullable', 'string', 'max:100'],
             'province'                   => ['nullable', 'string', 'max:100'],
             'address'                    => ['nullable', 'string', 'max:200'],
+            'skill_category'             => ['nullable', 'string'],
+            'jlpt_level'                 => ['nullable', 'string'],
+            'willing_to_be_deployed'     => ['nullable', 'string'],
+            'japan_deployment_ready'     => ['nullable', 'string'],
+            'previous_japan_experience'  => ['nullable', 'string'],
+            'ssw_eligible'               => ['nullable', 'string'],
         ];
     }
 

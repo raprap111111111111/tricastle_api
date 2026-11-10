@@ -55,11 +55,15 @@ class ApplicantResource extends JsonResource
             'photo_url'         => $streamPhotoUrl ?? $legacyPhotoUrl,
             'profile_photo_url' => $streamPhotoUrl ?? $legacyPhotoUrl,
 
-            'nationality'     => $this->nationality,
-            'status'          => $this->status,
-            'quality_score'   => (float) $this->quality_score,
-            'quality_grade'   => $this->quality_grade,
-            'passport_expiry' => $this->passport_expiry?->format('Y-m-d'),
+            'nationality'      => $this->nationality,
+            'status'           => $this->status,
+            'quality_score'    => (float) $this->quality_score,
+            'quality_grade'    => $this->quality_grade,
+            'passport_expiry'  => $this->passport_expiry?->format('Y-m-d'),
+
+            'current_company'  => $this->current_company,
+            'company_category' => $this->company_category,
+            'remarks'          => $this->remarks ?? [],
 
             // ✅ Address fields — always present for Final List table columns
             'city'              => $this->city,
@@ -108,6 +112,14 @@ class ApplicantResource extends JsonResource
                         'country'      => $ab->batch->country,
                         'status'       => $ab->batch->status,
                         'is_active'    => (bool) $ab->batch->is_active,
+                        'company'      => $ab->batch->relationLoaded('company') && $ab->batch->company ? [
+                            'id'       => $ab->batch->company->id,
+                            'name'     => $ab->batch->company->name,
+                            'category' => $ab->batch->company->relationLoaded('category') && $ab->batch->company->category ? [
+                                'id'   => $ab->batch->company->category->id,
+                                'name' => $ab->batch->company->category->name,
+                            ] : null,
+                        ] : null,
                     ] : null,
                 ])
             ),

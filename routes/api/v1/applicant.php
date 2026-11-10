@@ -34,6 +34,9 @@ Route::prefix('applicants/{applicant}')
         Route::patch('reject', [ApplicantController::class, 'reject'])
             ->name('applicants.reject');
 
+        Route::patch('remarks', [ApplicantController::class, 'updateRemarks'])
+            ->name('applicants.remarks');
+
         // ─── Staff Assignment ────────────────────────────────────────────────
         Route::patch('assign', [ApplicantController::class, 'assign'])
             ->name('applicants.assign');

@@ -32,7 +32,7 @@ class Applicant extends Model
         'email',
         'phone',
         'mobile',
-        'facebook_url', 
+        'facebook_url',
         'date_of_birth',
         'birthplace',
         'gender',
@@ -58,10 +58,10 @@ class Applicant extends Model
         // ── Passport / IDs ────────────────────────────────────────────────
         'passport_number',
         'passport_expiry',
-        'passport_issuing_office_id', // Linked Relation
-        'passport_issue_date',        // ✅ Added
-        'passport_received_at',       // ✅ Added
-        'passport_expiration_date',   // ✅ Added
+        'passport_issuing_office_id',
+        'passport_issue_date',
+        'passport_received_at',
+        'passport_expiration_date',
         'sss_number',
         'tin_number',
         'philhealth_number',
@@ -112,9 +112,10 @@ class Applicant extends Model
         'emergency_contact_phone',
         'emergency_contact_address',
 
-        // ── Application Status ────────────────────────────────────────────
+        // ── Application Status & Staff Notes ──────────────────────────────
         'status',
         'rejection_reason',
+        'remarks', 
         'final_listed_at',
         'rejected_at',
 
@@ -162,6 +163,7 @@ class Applicant extends Model
         // ── Enum ──────────────────────────────────────────────────────────
         'status'       => ApplicantStatus::class,
         'civil_status' => CivilStatus::class,
+        'remarks' => 'array',
     ];
 
     protected $appends = ['full_name', 'age', 'photo_url'];
@@ -183,6 +185,7 @@ class Applicant extends Model
                 'passport_number',
                 'passport_issuing_office_id',
                 'rejection_reason',
+                'remarks', 
                 'assigned_staff_id',
             ])
             ->logOnlyDirty()
@@ -351,10 +354,6 @@ class Applicant extends Model
         return $this->hasMany(ApplicantBatch::class);
     }
 
-    /**
-     * 🎯 FIX: Added snake_case alias to prevent RelationNotFoundException
-     * when eager loading or accessing $applicant->applicant_batches
-     */
     public function applicant_batches(): HasMany
     {
         return $this->applicantBatches();
@@ -366,16 +365,100 @@ class Applicant extends Model
             ->withPivot([
                 'id',
                 'status',
-                'batch_group_id', 
+                'batch_group_id',
                 'assigned_at',
                 'processed_by',
             ])
             ->withTimestamps()
             ->using(ApplicantBatch::class);
     }
-    
+
     public function internships(): HasMany
     {
         return $this->hasMany(ApplicantInternship::class);
+    }
+
+    public function currentBatch(): HasOne
+    {
+        return $this->hasOne(ApplicantBatch::class)->latestOfMany('assigned_at');
+    }
+
+    public function getCurrentCompanyAttribute(): ?string
+    {
+        $ab = $this->relationLoaded('applicantBatches')
+            ? $this->applicantBatches->first()
+            : ($this->relationLoaded('currentBatch') && $this->currentBatch
+                ? $this->currentBatch
+                : $this->applicantBatches()->latest('assigned_at')->first());
+
+        if ($ab) {
+            if ($ab->batch?->company) {
+                return $ab->batch->company->name;
+            }
+
+            if (!empty($ab->deployment_company)) {
+                if (is_numeric($ab->deployment_company)) {
+                    $comp = Company::withTrashed()->find((int) $ab->deployment_company);
+                    if ($comp?->name) {
+                        return $comp->name;
+                    }
+                } else {
+                    return $ab->deployment_company;
+                }
+            }
+        }
+
+        $internship = $this->relationLoaded('internships')
+            ? $this->internships->first()
+            : $this->internships()->latest()->first();
+
+        if ($internship) {
+            $receiving = $internship->relationLoaded('receivingCompany') && $internship->receivingCompany
+                ? $internship->receivingCompany
+                : ($internship->receiving_company_id ? Company::withTrashed()->find($internship->receiving_company_id) : null);
+
+            if ($receiving?->name) {
+                return $receiving->name;
+            }
+        }
+
+        if (isset($ab) && !empty($ab->deployment_company)) {
+            return "Company #{$ab->deployment_company}";
+        }
+
+        return null;
+    }
+
+    public function getCompanyCategoryAttribute(): ?string
+    {
+        $ab = $this->relationLoaded('applicantBatches')
+            ? $this->applicantBatches->first()
+            : ($this->relationLoaded('currentBatch') && $this->currentBatch
+                ? $this->currentBatch
+                : $this->applicantBatches()->latest('assigned_at')->first());
+
+        $company = null;
+
+        if ($ab) {
+            if ($ab->batch?->company) {
+                $company = $ab->batch->company;
+            } elseif (!empty($ab->deployment_company) && is_numeric($ab->deployment_company)) {
+                $company = Company::withTrashed()->with('category')->find((int) $ab->deployment_company);
+            }
+        }
+
+        if (!$company) {
+            $internship = $this->relationLoaded('internships')
+                ? $this->internships->first()
+                : $this->internships()->latest()->first();
+
+            if ($internship) {
+                $company = $internship->relationLoaded('receivingCompany') && $internship->receivingCompany
+                    ? $internship->receivingCompany
+                    : ($internship->receiving_company_id ? Company::withTrashed()->with('category')->find($internship->receiving_company_id) : null);
+            }
+        }
+
+        return $company?->category?->name ?? $company?->companyCategory?->name ?? null;
     }
 }

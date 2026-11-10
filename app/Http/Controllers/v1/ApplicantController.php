@@ -24,6 +24,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Domain\Applicant\Actions\ExportInsuranceFormAction;
 use App\Http\Requests\v1\Applicant\ExportInsuranceRequest;
+use App\Http\Requests\v1\Applicant\UpdateApplicantRemarksRequest;
+use App\Domain\Applicant\Actions\UpdateApplicantRemarksAction;
 
 class ApplicantController extends Controller
 {
@@ -263,5 +265,17 @@ class ApplicantController extends Controller
             $result,
             'Migrant Insurance document generated successfully'
         );
+    }
+    public function updateRemarks(
+        UpdateApplicantRemarksRequest $request,
+        Applicant $applicant,
+        UpdateApplicantRemarksAction $action,
+    ): ApplicantResource {
+        $updatedApplicant = $action->execute(
+            $applicant,
+            $request->validated('remarks')
+        );
+
+        return new ApplicantResource($updatedApplicant);
     }
 }
