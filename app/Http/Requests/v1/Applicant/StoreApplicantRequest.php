@@ -42,8 +42,17 @@ class StoreApplicantRequest extends FormRequest
             // ── Physical ──────────────────────────────────────────────────
             'height_cm'    => ['nullable', 'numeric', 'min:50',  'max:250'],
             'weight_kg'    => ['nullable', 'numeric', 'min:20',  'max:300'],
-            'dominant_hand'=> ['nullable', Rule::in(['left', 'right', 'both'])],
-            'blood_type'   => ['nullable', Rule::in(['A', 'B', 'AB', 'O'])],
+            'dominant_hand' => ['nullable', Rule::in(['left', 'right', 'both'])],
+            'blood_type'   => ['nullable', Rule::in([
+                'A+',
+                'A-',
+                'B+',
+                'B-',
+                'AB+',
+                'AB-',
+                'O+',
+                'O-',
+            ])],
 
             // ── Address ───────────────────────────────────────────────────
             'current_address'   => ['nullable', 'string', 'max:500'],
@@ -63,7 +72,7 @@ class StoreApplicantRequest extends FormRequest
 
             // ── Skill / Trade ─────────────────────────────────────────────
             'skill_category'     => ['nullable', Rule::in(['skilled', 'semi_skilled', 'unskilled'])],
-            'trade_or_occupation'=> ['nullable', 'string', 'max:100'],
+            'trade_or_occupation' => ['nullable', 'string', 'max:100'],
 
             // ── Language ──────────────────────────────────────────────────
             'understands_basic_english' => ['nullable', 'boolean'],
@@ -77,14 +86,19 @@ class StoreApplicantRequest extends FormRequest
             // ── Japan Experience ──────────────────────────────────────────
             'previous_japan_experience' => ['nullable', 'boolean'],
             'years_japan_experience'    => [
-                'nullable', 'integer', 'min:0', 'max:50',
+                'nullable',
+                'integer',
+                'min:0',
+                'max:50',
                 'required_if:previous_japan_experience,true',
             ],
 
             // ── Certifications ────────────────────────────────────────────
             'has_titp_certificate' => ['nullable', 'boolean'],
             'titp_occupation'      => [
-                'nullable', 'string', 'max:100',
+                'nullable',
+                'string',
+                'max:100',
                 'required_if:has_titp_certificate,true',
             ],
             'ssw_eligible' => ['nullable', 'boolean'],
