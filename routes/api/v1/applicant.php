@@ -12,6 +12,9 @@ Route::post('applicants/check-duplicates', [ApplicantController::class, 'checkDu
 Route::post('applicants/export-insurance', [ApplicantController::class, 'exportInsurance'])
     ->name('applicants.export-insurance');
 
+Route::post('applicants/bulk-final-list', [ApplicantController::class, 'bulkFinalList'])
+    ->name('applicants.bulk-final-list');
+
 // 👈 2. Added PDOS Batch Generation Route here
 Route::post('applicants/generate-pdos', [PdosCertificateController::class, 'generate'])
     ->name('applicants.generate-pdos');

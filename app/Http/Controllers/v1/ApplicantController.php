@@ -3,29 +3,31 @@
 namespace App\Http\Controllers\v1;
 
 use App\Domain\Applicant\Actions\AssignApplicantAction;
+use App\Domain\Applicant\Actions\BulkFinalListAction;
 use App\Domain\Applicant\Actions\CreateApplicantAction;
 use App\Domain\Applicant\Actions\DeleteApplicantAction;
+use App\Domain\Applicant\Actions\ExportInsuranceFormAction;
 use App\Domain\Applicant\Actions\GetApplicantAction;
 use App\Domain\Applicant\Actions\ListApplicantsAction;
 use App\Domain\Applicant\Actions\TransferApplicantAction;
 use App\Domain\Applicant\Actions\UpdateApplicantAction;
+use App\Domain\Applicant\Actions\UpdateApplicantRemarksAction;
 use App\Domain\Applicant\Actions\UpdateApplicantStatusAction;
 use App\Domain\Applicant\Mappers\ApplicantMapper;
 use App\Domain\Applicant\Services\DuplicateDetectionService;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\v1\Applicant\BulkFinalListRequest;
+use App\Http\Requests\v1\Applicant\ExportInsuranceRequest;
 use App\Http\Requests\v1\Applicant\GetAllApplicantRequest;
 use App\Http\Requests\v1\Applicant\RejectApplicantRequest;
 use App\Http\Requests\v1\Applicant\StoreApplicantRequest;
+use App\Http\Requests\v1\Applicant\UpdateApplicantRemarksRequest;
 use App\Http\Requests\v1\Applicant\UpdateApplicantRequest;
 use App\Http\Requests\v1\Applicant\UpdateApplicantStatusRequest;
 use App\Http\Resources\v1\ApplicantResource;
 use App\Models\Applicant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use App\Domain\Applicant\Actions\ExportInsuranceFormAction;
-use App\Http\Requests\v1\Applicant\ExportInsuranceRequest;
-use App\Http\Requests\v1\Applicant\UpdateApplicantRemarksRequest;
-use App\Domain\Applicant\Actions\UpdateApplicantRemarksAction;
 
 class ApplicantController extends Controller
 {
@@ -277,5 +279,20 @@ class ApplicantController extends Controller
         );
 
         return new ApplicantResource($updatedApplicant);
+    }
+
+    public function bulkFinalList(
+        BulkFinalListRequest $request,
+        BulkFinalListAction $action,
+    ): JsonResponse {
+        $updatedCount = $action->execute(
+            ids: $request->validated('ids'),
+            reviewedBy: $request->user()?->id,
+        );
+
+        return $this->responseSuccess(
+            ['updated_count' => $updatedCount],
+            "{$updatedCount} applicant(s) moved to Final List"
+        );
     }
 }

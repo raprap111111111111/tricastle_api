@@ -82,18 +82,44 @@ class ApplicantRepository extends BaseRepository
         $query   = parent::query();
         $request = request();
 
-        if ($request->filled('search')) {
+                if ($request->filled('search')) {
             $search = trim((string) $request->input('search'));
+            $words  = preg_split('/\s+/', $search, -1, PREG_SPLIT_NO_EMPTY);
 
-            $query->where(function (Builder $q) use ($search) {
+            $query->where(function (Builder $q) use ($search, $words) {
+                // 1) Exact/partial match against all searchable fields
                 foreach ($this->searchable as $field) {
                     $q->orWhere($field, 'like', '%' . $search . '%');
                 }
 
-                $q->orWhereRaw("CONCAT_WS(' ', first_name, last_name) LIKE ?", ['%' . $search . '%'])
-                    ->orWhereRaw("CONCAT_WS(' ', last_name, first_name) LIKE ?", ['%' . $search . '%'])
-                    ->orWhereRaw("CONCAT_WS(', ', last_name, first_name) LIKE ?", ['%' . $search . '%'])
-                    ->orWhereRaw("CONCAT_WS(' ', first_name, middle_name, last_name) LIKE ?", ['%' . $search . '%']);
+                // 2) Full name combinations
+                $q->orWhereRaw("CONCAT_WS(' ', first_name, NULLIF(middle_name,''), last_name) LIKE ?", ['%' . $search . '%'])
+                  ->orWhereRaw("CONCAT_WS(' ', last_name, NULLIF(middle_name,''), first_name) LIKE ?", ['%' . $search . '%'])
+                  ->orWhereRaw("CONCAT_WS(' ', first_name, last_name) LIKE ?", ['%' . $search . '%'])
+                  ->orWhereRaw("CONCAT_WS(' ', last_name, first_name) LIKE ?", ['%' . $search . '%']);
+
+                // 3) Multi-word: each word must match at least one name field
+                if (count($words) > 1) {
+                    $q->orWhere(function (Builder $sub) use ($words) {
+                        foreach ($words as $word) {
+                            $sub->where(function (Builder $w) use ($word) {
+                                $w->where('first_name', 'like', '%' . $word . '%')
+                                  ->orWhere('middle_name', 'like', '%' . $word . '%')
+                                  ->orWhere('last_name', 'like', '%' . $word . '%');
+                            });
+                        }
+                    });
+                }
+
+                // 4) 🔊 Fuzzy SOUNDEX matching on name fields (handles typos)
+                //    e.g. "delacroz" matches "delacruz", "jon" matches "john"
+                foreach ($words as $word) {
+                    if (strlen($word) >= 3) {
+                        $q->orWhereRaw("SOUNDEX(first_name) = SOUNDEX(?)", [$word])
+                          ->orWhereRaw("SOUNDEX(middle_name) = SOUNDEX(?)", [$word])
+                          ->orWhereRaw("SOUNDEX(last_name) = SOUNDEX(?)", [$word]);
+                    }
+                }
             });
         }
 
@@ -409,5 +435,17 @@ class ApplicantRepository extends BaseRepository
             'applicantBatches.batch',
             'applicantBatches.processedBy',
         ])->find($id);
+    }
+
+    // ✅ FIXED
+    public function bulkMoveToFinalList(array $ids, ?int $reviewedBy = null): int
+    {
+        return Applicant::whereIn('id', $ids)
+            ->whereNotIn('status', ['final_list', 'rejected'])
+            ->update([
+                'status'          => 'final_list',
+                'final_listed_at' => now(),
+                'reviewed_by'     => $reviewedBy,
+            ]);
     }
 }
