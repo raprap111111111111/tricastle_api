@@ -134,7 +134,7 @@ class PublicRegisterApplicantRequest extends FormRequest
             'pagibig_number'             => ['nullable', 'string', 'max:50'],
 
             // Skills & Deployment
-            'applied_position'           => ['required', 'string', 'max:150'],
+            'applied_position'           => ['nullable', 'string', 'max:150'],
             'skill_category'             => ['nullable', 'string', 'in:skilled,semi_skilled,unskilled'],
             'trade_or_occupation'        => ['nullable', 'string', 'max:150'],
             'jlpt_level'                 => ['nullable', 'string', 'in:N1,N2,N3,N4,N5'],

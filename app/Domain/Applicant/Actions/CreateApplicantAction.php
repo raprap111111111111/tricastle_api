@@ -146,7 +146,7 @@ class CreateApplicantAction
                 // ── Meta & Assignment ────────────────────────────────────────
                 'assigned_staff_id' => $dto->assignedStaffId,
                 'created_by'        => $dto->createdBy,
-                'status'            => 'pending',
+                'status' => $dto->status ?? 'pending',
             ]);
 
             // ── 3. Create Relational Family Record ───────────────────────────
