@@ -30,7 +30,6 @@ class GetAllApplicantRequest extends FormRequest
 
     public function rules(): array
     {
-        // Validation rules for the request parameters
         return [
             'page'      => ['nullable', 'integer', 'min:1'],
             'search'    => ['nullable', 'string', 'min:1', 'max:100'],
@@ -41,6 +40,7 @@ class GetAllApplicantRequest extends FormRequest
 
             // Filters
             'status'                     => ['nullable', 'string'],
+            'year'                       => ['nullable', 'integer', 'digits:4'], 
             'exclude_statuses'           => ['nullable', 'string'],
             'gender'                     => ['nullable', 'in:male,female'],
             'civil_status'               => ['nullable', 'string'],
@@ -49,9 +49,9 @@ class GetAllApplicantRequest extends FormRequest
             'assigned_staff_id'          => ['nullable', 'integer', 'exists:users,id'],
             'passport_issuing_office_id' => ['nullable', 'integer', 'exists:passport_issuing_offices,id'],
             'batch_id'                   => ['nullable', 'integer', 'exists:batches,id'],
-            'group_id'            => ['nullable', 'integer', 'exists:batch_groups,id'],
-            'company_id'          => ['nullable', 'integer'],
-            'company_category_id' => ['nullable', 'integer'],
+            'group_id'                   => ['nullable', 'integer', 'exists:batch_groups,id'],
+            'company_id'                 => ['nullable', 'integer'],
+            'company_category_id'        => ['nullable', 'integer'],
             'city'                       => ['nullable', 'string', 'max:100'],
             'province'                   => ['nullable', 'string', 'max:100'],
             'address'                    => ['nullable', 'string', 'max:200'],

@@ -1,11 +1,10 @@
 <?php
 
 use App\Http\Controllers\v1\ApplicantController;
-use App\Http\Controllers\v1\PdosCertificateController; // 👈 1. Added Import
+use App\Http\Controllers\v1\PdosCertificateController;
 use Illuminate\Support\Facades\Route;
 
 // ─── Bulk Actions & Special Endpoints ───────────────────────────────────────
-// Declared before apiResource to avoid route parameter collision ({applicant})
 Route::post('applicants/check-duplicates', [ApplicantController::class, 'checkDuplicates'])
     ->name('applicants.check-duplicates');
 
@@ -15,12 +14,10 @@ Route::post('applicants/export-insurance', [ApplicantController::class, 'exportI
 Route::post('applicants/bulk-final-list', [ApplicantController::class, 'bulkFinalList'])
     ->name('applicants.bulk-final-list');
 
-// 👈 2. Added PDOS Batch Generation Route here
 Route::post('applicants/generate-pdos', [PdosCertificateController::class, 'generate'])
     ->name('applicants.generate-pdos');
 
 // ─── Core CRUD ──────────────────────────────────────────────────────────────
-// Registers: index, store, show, update, destroy
 Route::apiResource('applicants', ApplicantController::class)
     ->whereNumber('applicant');
 
@@ -30,6 +27,10 @@ Route::prefix('applicants/{applicant}')
     ->group(function () {
         Route::patch('status', [ApplicantController::class, 'updateStatus'])
             ->name('applicants.update-status');
+
+        // 👈 NEW: Accept Self-Registered Applicant
+        Route::patch('accept-self-registered', [ApplicantController::class, 'acceptSelfRegistered'])
+            ->name('applicants.accept-self-registered');
 
         Route::patch('move-to-final-list', [ApplicantController::class, 'moveToFinalList'])
             ->name('applicants.move-to-final-list');

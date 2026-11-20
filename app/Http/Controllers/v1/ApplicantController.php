@@ -15,6 +15,8 @@ use App\Domain\Applicant\Actions\UpdateApplicantRemarksAction;
 use App\Domain\Applicant\Actions\UpdateApplicantStatusAction;
 use App\Domain\Applicant\Mappers\ApplicantMapper;
 use App\Domain\Applicant\Services\DuplicateDetectionService;
+use App\Enums\ApplicantStatus;
+use App\Domain\Applicant\Actions\AcceptSelfRegisteredApplicantAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\v1\Applicant\BulkFinalListRequest;
 use App\Http\Requests\v1\Applicant\ExportInsuranceRequest;
@@ -117,11 +119,6 @@ class ApplicantController extends Controller
     // ═══════════════════════════════════════════════════════
     // Status Transitions
     // ═══════════════════════════════════════════════════════
-
-    /**
-     * Generic status update.
-     * PATCH /applicants/{id}/status
-     */
     public function updateStatus(
         UpdateApplicantStatusRequest $request,
         Applicant $applicant,
@@ -136,7 +133,6 @@ class ApplicantController extends Controller
             "Applicant status updated to {$updated->status->label()}"
         );
     }
-
     /**
      * Move applicant to final list.
      * PATCH /applicants/{id}/move-to-final-list
@@ -293,6 +289,27 @@ class ApplicantController extends Controller
         return $this->responseSuccess(
             ['updated_count' => $updatedCount],
             "{$updatedCount} applicant(s) moved to Final List"
+        );
+    }
+
+    public function acceptSelfRegistered(
+        Request $request,
+        Applicant $applicant,
+        AcceptSelfRegisteredApplicantAction $action
+    ): JsonResponse {
+        if ($applicant->status !== ApplicantStatus::SelfRegistered) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This applicant is not in self-registered status.',
+            ], 422);
+        }
+
+        $staffUserId = $request->user()?->id ?? auth()->id();
+        $updatedApplicant = $action->execute($applicant, $staffUserId);
+
+        return $this->responseSuccess(
+            new ApplicantResource($updatedApplicant),
+            "Applicant {$updatedApplicant->applicant_code} accepted successfully. Portal account is now active."
         );
     }
 }

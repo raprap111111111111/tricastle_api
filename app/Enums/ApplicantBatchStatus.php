@@ -19,8 +19,8 @@ enum ApplicantBatchStatus: string
     case REJECTED            = 'rejected';
     case WITHDRAWN           = 'withdrawn';
     case DEPLOYED            = 'deployed';
-    case RETURNED            = 'returned';   // 🏠 Came home before contract ended
-    case COMPLETED           = 'completed';  // ✅ Contract successfully finished
+    case RETURNED            = 'returned';   
+    case COMPLETED           = 'completed';  
 
     public function label(): string
     {

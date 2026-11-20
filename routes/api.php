@@ -26,8 +26,7 @@ Route::prefix('v1')->group(function () {
             ->whereNumber('applicantDocument');
     });
 
-    // Optional: public avatar stream (so <img src="..."> works without Authorization header)
-    // If you prefer avatars auth-only, remove this block and keep only the route in user.php
+    // Optional: public avatar stream
     Route::get('/users/{user}/avatar', [UserController::class, 'avatar'])
         ->whereNumber('user')
         ->name('users.avatar.public');
@@ -37,10 +36,14 @@ Route::prefix('v1')->group(function () {
         Route::post('/register', [AuthController::class, 'register'])->name('auth.register');
     });
 
-    // ── 🔵 Applicant Portal ──────────────────────
-    // Loaded OUTSIDE auth:api because it has its own
-    // auth:applicant (Sanctum) guard inside the file.
+    // ── 🟢 Public Self-Registration (QR / Walk-In) ────────────────
+    // Loaded OUTSIDE auth:api so anyone can register without logging in
+    require __DIR__ . '/api/v1/public-apply.php';
+
+    // ── 🔵 Applicant Portal ──────────────────────────────────────
+    // Loaded OUTSIDE auth:api because it has its own auth:applicant guard
     require __DIR__ . '/api/v1/portal.php';
+
 
     // ============================================
     // 🔒 PROTECTED ROUTES (Staff — Passport auth:api)
@@ -57,16 +60,17 @@ Route::prefix('v1')->group(function () {
         });
 
         // ── 🟠 Staff: Profile Update Requests ────
-        // Loaded INSIDE auth:api — inherits Passport guard.
         require __DIR__ . '/api/v1/profile_update_requests.php';
 
-        // Auto-load any future staff-only route modules
+        // Auto-load remaining staff-only route modules
         foreach (glob(__DIR__ . '/api/v1/*.php') as $routeFile) {
             $basename = basename($routeFile);
-            // Skip files already loaded explicitly above
-            if (in_array($basename, ['portal.php', 'profile_update_requests.php'])) {
+
+            // 👈 CRITICAL: Skip public-apply.php, portal.php, and profile_update_requests.php
+            if (in_array($basename, ['portal.php', 'profile_update_requests.php', 'public-apply.php'])) {
                 continue;
             }
+
             require $routeFile;
         }
     });
