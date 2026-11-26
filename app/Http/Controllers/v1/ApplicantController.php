@@ -30,6 +30,9 @@ use App\Http\Resources\v1\ApplicantResource;
 use App\Models\Applicant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Domain\Applicant\Actions\ExportAisWordAction;
+
+
 
 class ApplicantController extends Controller
 {
@@ -292,6 +295,18 @@ class ApplicantController extends Controller
         );
     }
 
+
+
+/**
+ * Export selected applicant into AIS Word DOCX form.
+ * GET /api/v1/applicants/{applicant}/ais-word
+ */
+public function exportAisWord(Applicant $applicant, ExportAisWordAction $action)
+{
+    return $action->execute($applicant);
+}
+
+    /*accept self-registered applicant and activate portal account*/
     public function acceptSelfRegistered(
         Request $request,
         Applicant $applicant,

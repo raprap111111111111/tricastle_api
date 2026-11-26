@@ -25,10 +25,17 @@ Route::apiResource('applicants', ApplicantController::class)
 Route::prefix('applicants/{applicant}')
     ->whereNumber('applicant')
     ->group(function () {
+
+        // 🎯 AIS Document Exports (Word & Excel)
+        Route::get('ais-word', [ApplicantController::class, 'exportAisWord'])
+            ->name('applicants.ais-word');
+
+        Route::get('ais', [ApplicantController::class, 'exportAis'])
+            ->name('applicants.ais');
+
         Route::patch('status', [ApplicantController::class, 'updateStatus'])
             ->name('applicants.update-status');
 
-        // 👈 NEW: Accept Self-Registered Applicant
         Route::patch('accept-self-registered', [ApplicantController::class, 'acceptSelfRegistered'])
             ->name('applicants.accept-self-registered');
 

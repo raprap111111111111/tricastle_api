@@ -12,7 +12,7 @@ class ApplicantRepository extends BaseRepository
     protected string $model = Applicant::class;
 
     protected array $relations = [
-        'assignedStaff:id,name,full_name',
+        'assignedStaff:id,name',
         'passportOffice:id,region,name,address',
         'applicantBatches.batch.company.category',
         'currentDocuments:id,applicant_id,document_type_id,file_path,file_name,status',
@@ -25,6 +25,8 @@ class ApplicantRepository extends BaseRepository
         'middle_name',
         'last_name',
         'email',
+        'mobile',
+        'phone',
         'passport_number',
         'city',
         'province',
@@ -34,6 +36,7 @@ class ApplicantRepository extends BaseRepository
         'religion',
     ];
 
+    // Note: Fields handled manually via LIKE in query() are excluded here to prevent duplicate WHERE conditions
     protected array $filterable = [
         'status',
         'gender',
@@ -44,11 +47,10 @@ class ApplicantRepository extends BaseRepository
         'passport_issuing_office_id',
         'skill_category',
         'jlpt_level',
-        'applied_position',
         'trade_test_try',
         'blood_type',
         'dominant_hand',
-        'religion',
+        'province',
     ];
 
     protected array $sortable = [
@@ -61,7 +63,7 @@ class ApplicantRepository extends BaseRepository
         'quality_score',
         'quality_grade',
         'passport_expiry',
-        'passport_issuing_office_id', // Added Sort Option
+        'passport_issuing_office_id',
         'skill_category',
         'jlpt_level',
         'years_japan_experience',
@@ -82,85 +84,91 @@ class ApplicantRepository extends BaseRepository
         $query   = parent::query();
         $request = request();
 
-                if ($request->filled('search')) {
+        // ─── 1. TiDB-Safe Fast Search (No SOUNDEX) ────────────────────────
+        if ($request->filled('search')) {
             $search = trim((string) $request->input('search'));
-            $words  = preg_split('/\s+/', $search, -1, PREG_SPLIT_NO_EMPTY);
+            $words  = preg_split('/\s+/', $search, -1, PREG_SPLIT_NO_EMPTY) ?: [];
 
             $query->where(function (Builder $q) use ($search, $words) {
-                // 1) Exact/partial match against all searchable fields
+                // 1) Match against searchable fields with explicit table prefix
                 foreach ($this->searchable as $field) {
-                    $q->orWhere($field, 'like', '%' . $search . '%');
+                    $q->orWhere("applicants.{$field}", 'LIKE', "%{$search}%");
                 }
 
-                // 2) Full name combinations
-                $q->orWhereRaw("CONCAT_WS(' ', first_name, NULLIF(middle_name,''), last_name) LIKE ?", ['%' . $search . '%'])
-                  ->orWhereRaw("CONCAT_WS(' ', last_name, NULLIF(middle_name,''), first_name) LIKE ?", ['%' . $search . '%'])
-                  ->orWhereRaw("CONCAT_WS(' ', first_name, last_name) LIKE ?", ['%' . $search . '%'])
-                  ->orWhereRaw("CONCAT_WS(' ', last_name, first_name) LIKE ?", ['%' . $search . '%']);
+                // 2) Full name variations
+                $q->orWhereRaw("CONCAT_WS(' ', applicants.first_name, NULLIF(applicants.middle_name, ''), applicants.last_name) LIKE ?", ["%{$search}%"])
+                  ->orWhereRaw("CONCAT_WS(' ', applicants.last_name, NULLIF(applicants.middle_name, ''), applicants.first_name) LIKE ?", ["%{$search}%"])
+                  ->orWhereRaw("CONCAT_WS(' ', applicants.first_name, applicants.last_name) LIKE ?", ["%{$search}%"])
+                  ->orWhereRaw("CONCAT_WS(' ', applicants.last_name, applicants.first_name) LIKE ?", ["%{$search}%"]);
 
-                // 3) Multi-word: each word must match at least one name field
+                // 3) Multi-term matching (e.g. "Juan Cruz")
                 if (count($words) > 1) {
                     $q->orWhere(function (Builder $sub) use ($words) {
                         foreach ($words as $word) {
                             $sub->where(function (Builder $w) use ($word) {
-                                $w->where('first_name', 'like', '%' . $word . '%')
-                                  ->orWhere('middle_name', 'like', '%' . $word . '%')
-                                  ->orWhere('last_name', 'like', '%' . $word . '%');
+                                $w->where('applicants.first_name', 'LIKE', "%{$word}%")
+                                  ->orWhere('applicants.middle_name', 'LIKE', "%{$word}%")
+                                  ->orWhere('applicants.last_name', 'LIKE', "%{$word}%")
+                                  ->orWhere('applicants.applicant_code', 'LIKE', "%{$word}%");
                             });
                         }
                     });
                 }
-
-                // 4) 🔊 Fuzzy SOUNDEX matching on name fields (handles typos)
-                //    e.g. "delacroz" matches "delacruz", "jon" matches "john"
-                foreach ($words as $word) {
-                    if (strlen($word) >= 3) {
-                        $q->orWhereRaw("SOUNDEX(first_name) = SOUNDEX(?)", [$word])
-                          ->orWhereRaw("SOUNDEX(middle_name) = SOUNDEX(?)", [$word])
-                          ->orWhereRaw("SOUNDEX(last_name) = SOUNDEX(?)", [$word]);
-                    }
-                }
             });
+        }
+
+        // ─── 2. Status & Exclusions ───────────────────────────────────────
+        if ($request->filled('status')) {
+            $query->where('applicants.status', $request->input('status'));
         }
 
         if ($request->filled('exclude_statuses')) {
-            $excluded = array_map(
-                'trim',
-                explode(',', $request->input('exclude_statuses')),
-            );
-            $query->whereNotIn('status', $excluded);
+            $excluded = array_map('trim', explode(',', (string) $request->input('exclude_statuses')));
+            $query->whereNotIn('applicants.status', array_filter($excluded));
         }
 
+        // ─── 3. Year Filter (Created At) ──────────────────────────────────
+        if ($request->filled('year')) {
+            $query->whereYear('applicants.created_at', (int) $request->input('year'));
+        }
+
+        // ─── 4. Passport & Office Filters ─────────────────────────────────
         if ($request->filled('passport_expiring_within_months')) {
             $months = (int) $request->input('passport_expiring_within_months');
-            $query->whereNotNull('passport_expiry')
-                ->whereDate('passport_expiry', '<=', now()->addMonths($months))
-                ->whereDate('passport_expiry', '>=', now());
+            $query->whereNotNull('applicants.passport_expiry')
+                  ->whereDate('applicants.passport_expiry', '<=', now()->addMonths($months))
+                  ->whereDate('applicants.passport_expiry', '>=', now());
         }
 
-        // Dynamic Filtering by specific DFA Locations
         if ($request->filled('passport_issuing_office_id')) {
-            $query->where('passport_issuing_office_id', $request->input('passport_issuing_office_id'));
+            $query->where('applicants.passport_issuing_office_id', (int) $request->input('passport_issuing_office_id'));
         }
 
+        // ─── 5. Batch & Group Filters ─────────────────────────────────────
         if ($request->filled('batch_id') && $request->filled('group_id')) {
             $query->whereHas('applicantBatches', function (Builder $q) use ($request) {
-                $q->where('batch_id', $request->input('batch_id'))
-                    ->where('batch_group_id', $request->input('group_id'));
+                $q->where('batch_id', (int) $request->input('batch_id'))
+                  ->where('batch_group_id', (int) $request->input('group_id'));
             });
         } elseif ($request->filled('batch_id')) {
             $query->whereHas('applicantBatches', function (Builder $q) use ($request) {
-                $q->where('batch_id', $request->input('batch_id'));
+                $q->where('batch_id', (int) $request->input('batch_id'));
             });
         } elseif ($request->filled('group_id')) {
             $query->whereHas('applicantBatches', function (Builder $q) use ($request) {
-                $q->where('batch_group_id', $request->input('group_id'));
+                $q->where('batch_group_id', (int) $request->input('group_id'));
             });
         }
 
-        // ── Company Filter (checks applicantBatches by ID/Name/Code AND internships) ──
+        if ($request->filled('batch_status')) {
+            $query->whereHas('applicantBatches', function (Builder $q) use ($request) {
+                $q->where('status', $request->input('batch_status'));
+            });
+        }
+
+        // ─── 6. Company & Category Filters ────────────────────────────────
         if ($request->filled('company_id')) {
-            $companyId   = $request->input('company_id');
+            $companyId   = (int) $request->input('company_id');
             $company     = Company::withTrashed()->find($companyId);
             $companyName = $company?->name;
             $companyCode = $company?->code;
@@ -169,7 +177,6 @@ class ApplicantRepository extends BaseRepository
                 $mainQuery->whereHas('applicantBatches', function (Builder $q) use ($companyId, $companyName, $companyCode) {
                     $q->where(function (Builder $sub) use ($companyId, $companyName, $companyCode) {
                         $sub->where('deployment_company', (string) $companyId);
-
                         if ($companyName) {
                             $sub->orWhere('deployment_company', $companyName);
                         }
@@ -181,21 +188,16 @@ class ApplicantRepository extends BaseRepository
                     });
                 })->orWhereHas('internships', function (Builder $iq) use ($companyId) {
                     $iq->where('receiving_company_id', $companyId)
-                        ->orWhere('accepting_company_id', $companyId)
-                        ->orWhere('dispatching_company_id', $companyId);
+                       ->orWhere('accepting_company_id', $companyId)
+                       ->orWhere('dispatching_company_id', $companyId);
                 });
             });
         }
 
-        // ── Company Category Filter ──
         if ($request->filled('company_category_id')) {
-            $categoryId = $request->input('company_category_id');
-
-            // Query matching companies via Eloquent category relation (avoids unknown column errors)
+            $categoryId = (int) $request->input('company_category_id');
             $matchingCompanies = Company::withTrashed()
-                ->whereHas('category', function (Builder $cq) use ($categoryId) {
-                    $cq->where('id', $categoryId);
-                })
+                ->whereHas('category', fn(Builder $cq) => $cq->where('id', $categoryId))
                 ->get(['id', 'name', 'code']);
 
             $matchingCompanyIds   = $matchingCompanies->pluck('id')->map('strval')->toArray();
@@ -206,12 +208,10 @@ class ApplicantRepository extends BaseRepository
                 $mainQuery->whereHas('applicantBatches', function (Builder $q) use ($categoryId, $matchingCompanyIds, $matchingCompanyNames, $matchingCompanyCodes) {
                     $q->where(function (Builder $sub) use ($matchingCompanyIds, $matchingCompanyNames, $matchingCompanyCodes) {
                         $hasCondition = false;
-
                         if (!empty($matchingCompanyIds)) {
                             $sub->whereIn('deployment_company', $matchingCompanyIds);
                             $hasCondition = true;
                         }
-
                         if (!empty($matchingCompanyNames)) {
                             if ($hasCondition) {
                                 $sub->orWhereIn('deployment_company', $matchingCompanyNames);
@@ -220,7 +220,6 @@ class ApplicantRepository extends BaseRepository
                                 $hasCondition = true;
                             }
                         }
-
                         if (!empty($matchingCompanyCodes)) {
                             if ($hasCondition) {
                                 $sub->orWhereIn('deployment_company', $matchingCompanyCodes);
@@ -228,143 +227,146 @@ class ApplicantRepository extends BaseRepository
                                 $sub->whereIn('deployment_company', $matchingCompanyCodes);
                             }
                         }
-                    })->orWhereHas('batch.company.category', function (Builder $cq) use ($categoryId) {
-                        $cq->where('id', $categoryId);
-                    });
+                    })->orWhereHas('batch.company.category', fn(Builder $cq) => $cq->where('id', $categoryId));
                 })->orWhereHas('internships', function (Builder $iq) use ($categoryId, $matchingCompanyIds) {
-                    $iq->whereHas('receivingCompany.category', function (Builder $cq) use ($categoryId) {
-                        $cq->where('id', $categoryId);
-                    });
-
+                    $iq->whereHas('receivingCompany.category', fn(Builder $cq) => $cq->where('id', $categoryId));
                     if (!empty($matchingCompanyIds)) {
                         $iq->orWhereIn('receiving_company_id', $matchingCompanyIds)
-                            ->orWhereIn('accepting_company_id', $matchingCompanyIds)
-                            ->orWhereIn('dispatching_company_id', $matchingCompanyIds);
+                           ->orWhereIn('accepting_company_id', $matchingCompanyIds)
+                           ->orWhereIn('dispatching_company_id', $matchingCompanyIds);
                     }
                 });
             });
         }
 
-        if ($request->filled('batch_status')) {
-            $query->whereHas('applicantBatches', function (Builder $q) use ($request) {
-                $q->where('status', $request->input('batch_status'));
-            });
+        // ─── 7. Demographics & Address Filters ───────────────────────────
+        if ($request->filled('gender')) {
+            $query->where('applicants.gender', $request->input('gender'));
+        }
+
+        if ($request->filled('civil_status')) {
+            $query->where('applicants.civil_status', $request->input('civil_status'));
+        }
+
+        if ($request->filled('nationality')) {
+            $query->where('applicants.nationality', $request->input('nationality'));
+        }
+
+        if ($request->filled('quality_grade')) {
+            $query->where('applicants.quality_grade', $request->input('quality_grade'));
+        }
+
+        if ($request->filled('assigned_staff_id')) {
+            $query->where('applicants.assigned_staff_id', (int) $request->input('assigned_staff_id'));
         }
 
         if ($request->filled('city')) {
-            $city = trim($request->input('city'));
-            $query->where('city', 'like', '%' . $city . '%');
+            $query->where('applicants.city', 'LIKE', '%' . trim($request->input('city')) . '%');
         }
 
         if ($request->filled('province')) {
-            $query->where('province', $request->input('province'));
+            $query->where('applicants.province', $request->input('province'));
         }
 
         if ($request->filled('address')) {
             $address = trim($request->input('address'));
             $query->where(function (Builder $q) use ($address) {
-                $q->where('current_address',   'like', '%' . $address . '%')
-                    ->orWhere('permanent_address', 'like', '%' . $address . '%');
+                $q->where('applicants.current_address', 'LIKE', '%' . $address . '%')
+                  ->orWhere('applicants.permanent_address', 'LIKE', '%' . $address . '%');
             });
         }
 
+        // ─── 8. Trade & Deployment Filters ───────────────────────────────
         if ($request->filled('applied_position')) {
-            $position = trim($request->input('applied_position'));
-            $query->where('applied_position', 'like', '%' . $position . '%');
-        }
-
-        if ($request->filled('trade_test_try')) {
-            $query->where('trade_test_try', $request->input('trade_test_try'));
-        }
-
-        if ($request->filled('trade_test_date_from')) {
-            $query->whereDate('trade_test_date', '>=', $request->input('trade_test_date_from'));
-        }
-
-        if ($request->filled('trade_test_date_to')) {
-            $query->whereDate('trade_test_date', '<=', $request->input('trade_test_date_to'));
-        }
-
-        if ($request->filled('birthplace')) {
-            $birthplace = trim($request->input('birthplace'));
-            $query->where('birthplace', 'like', '%' . $birthplace . '%');
-        }
-
-        if ($request->filled('religion')) {
-            $query->where('religion', $request->input('religion'));
-        }
-
-        if ($request->filled('min_english_proficiency')) {
-            $query->where(
-                'english_proficiency_pct',
-                '>=',
-                (int) $request->input('min_english_proficiency'),
-            );
+            $query->where('applicants.applied_position', 'LIKE', '%' . trim($request->input('applied_position')) . '%');
         }
 
         if ($request->filled('trade_or_occupation')) {
-            $trade = trim($request->input('trade_or_occupation'));
-            $query->where('trade_or_occupation', 'like', '%' . $trade . '%');
+            $query->where('applicants.trade_or_occupation', 'LIKE', '%' . trim($request->input('trade_or_occupation')) . '%');
+        }
+
+        if ($request->filled('skill_category')) {
+            $query->where('applicants.skill_category', $request->input('skill_category'));
+        }
+
+        if ($request->filled('jlpt_level')) {
+            $query->where('applicants.jlpt_level', $request->input('jlpt_level'));
+        }
+
+        if ($request->filled('trade_test_try')) {
+            $query->where('applicants.trade_test_try', $request->input('trade_test_try'));
+        }
+
+        if ($request->filled('trade_test_date_from')) {
+            $query->whereDate('applicants.trade_test_date', '>=', $request->input('trade_test_date_from'));
+        }
+
+        if ($request->filled('trade_test_date_to')) {
+            $query->whereDate('applicants.trade_test_date', '<=', $request->input('trade_test_date_to'));
+        }
+
+        if ($request->filled('birthplace')) {
+            $query->where('applicants.birthplace', 'LIKE', '%' . trim($request->input('birthplace')) . '%');
+        }
+
+        if ($request->filled('religion')) {
+            $query->where('applicants.religion', $request->input('religion'));
+        }
+
+        if ($request->filled('min_english_proficiency')) {
+            $query->where('applicants.english_proficiency_pct', '>=', (int) $request->input('min_english_proficiency'));
         }
 
         if ($request->filled('preferred_work_location')) {
-            $location = trim($request->input('preferred_work_location'));
-            $query->where('preferred_work_location', 'like', '%' . $location . '%');
+            $query->where('applicants.preferred_work_location', 'LIKE', '%' . trim($request->input('preferred_work_location')) . '%');
         }
 
         if ($request->filled('titp_occupation')) {
-            $titp = trim($request->input('titp_occupation'));
-            $query->where('titp_occupation', 'like', '%' . $titp . '%');
+            $query->where('applicants.titp_occupation', 'LIKE', '%' . trim($request->input('titp_occupation')) . '%');
         }
 
         if ($request->filled('min_years_japan_experience')) {
-            $query->where(
-                'years_japan_experience',
-                '>=',
-                (int) $request->input('min_years_japan_experience'),
-            );
+            $query->where('applicants.years_japan_experience', '>=', (int) $request->input('min_years_japan_experience'));
         }
 
         if ($request->filled('min_expected_salary')) {
-            $query->where('expected_salary', '>=', (float) $request->input('min_expected_salary'));
+            $query->where('applicants.expected_salary', '>=', (float) $request->input('min_expected_salary'));
         }
 
         if ($request->filled('max_expected_salary')) {
-            $query->where('expected_salary', '<=', (float) $request->input('max_expected_salary'));
+            $query->where('applicants.expected_salary', '<=', (float) $request->input('max_expected_salary'));
         }
 
-        foreach (
-            [
-                'understands_basic_english',
-                'willing_to_be_deployed',
-                'japan_deployment_ready',
-                'previous_japan_experience',
-                'has_titp_certificate',
-                'ssw_eligible',
-            ] as $flag
-        ) {
-            if ($request->has($flag)) {
-                $query->where($flag, (bool) $request->input($flag));
+        // ─── 9. Boolean Flags ─────────────────────────────────────────────
+        $booleanFlags = [
+            'understands_basic_english',
+            'willing_to_be_deployed',
+            'japan_deployment_ready',
+            'previous_japan_experience',
+            'has_titp_certificate',
+            'ssw_eligible',
+        ];
+
+        foreach ($booleanFlags as $flag) {
+            if ($request->filled($flag)) {
+                $val = filter_var($request->input($flag), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+                if ($val !== null) {
+                    $query->where("applicants.{$flag}", $val);
+                }
             }
         }
 
-        if ($request->has('has_marucon_contact')) {
-            $has = (bool) $request->input('has_marucon_contact');
+        if ($request->filled('has_marucon_contact')) {
+            $has = filter_var($request->input('has_marucon_contact'), FILTER_VALIDATE_BOOLEAN);
             if ($has) {
-                $query->whereHas(
-                    'japanContacts',
-                    fn(Builder $q) => $q->where('affiliation_type', 'marucon')
-                );
+                $query->whereHas('japanContacts', fn(Builder $q) => $q->where('affiliation_type', 'marucon'));
             } else {
-                $query->whereDoesntHave(
-                    'japanContacts',
-                    fn(Builder $q) => $q->where('affiliation_type', 'marucon')
-                );
+                $query->whereDoesntHave('japanContacts', fn(Builder $q) => $q->where('affiliation_type', 'marucon'));
             }
         }
 
-        if ($request->has('has_japan_contact')) {
-            $has = (bool) $request->input('has_japan_contact');
+        if ($request->filled('has_japan_contact')) {
+            $has = filter_var($request->input('has_japan_contact'), FILTER_VALIDATE_BOOLEAN);
             if ($has) {
                 $query->whereHas('japanContacts');
             } else {
@@ -418,6 +420,9 @@ class ApplicantRepository extends BaseRepository
         ])->find($id);
     }
 
+    /**
+     * Eager-loads full profile with chronological ordering for education & employment timelines.
+     */
     public function findWithFullProfile(int $id): ?Applicant
     {
         return Applicant::with([
@@ -427,17 +432,16 @@ class ApplicantRepository extends BaseRepository
             'family',
             'japanContacts',
             'lifestyle',
-            'educations',
-            'employments',
+            'educations' => fn($q) => $q->orderBy('date_started', 'desc'),
+            'employments' => fn($q) => $q->orderBy('date_started', 'desc'),
             'tattoos',
-            'passportOffice', // Full Profile Include
+            'passportOffice',
             'currentDocuments.documentType',
             'applicantBatches.batch',
             'applicantBatches.processedBy',
         ])->find($id);
     }
 
-    // ✅ FIXED
     public function bulkMoveToFinalList(array $ids, ?int $reviewedBy = null): int
     {
         return Applicant::whereIn('id', $ids)

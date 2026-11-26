@@ -61,18 +61,18 @@ class CreateApplicantAction
             // ── 2. Create main Applicant record ──────────────────────────────
             $applicant = $this->repository->create([
                 // ── Personal & Identity ──────────────────────────────────────
-                'first_name'         => $dto->firstName,
-                'middle_name'        => $dto->middleName,
-                'last_name'          => $dto->lastName,
-                'suffix'             => $dto->suffix,
-                'email'              => $dto->email,
-                'phone'              => $dto->phone,
-                'mobile'             => $dto->mobile,
-                'date_of_birth'      => $dto->dateOfBirth,
-                'gender'             => $dto->gender,
-                'civil_status'       => $civilStatus?->value ?? $dto->civilStatus,
-                'number_of_children' => $dto->numberOfChildren,
-                'nationality'        => $dto->nationality,
+                'first_name'              => $dto->firstName,
+                'middle_name'             => $dto->middleName,
+                'last_name'               => $dto->lastName,
+                'suffix'                  => $dto->suffix,
+                'email'                   => $dto->email,
+                'phone'                   => $dto->phone,
+                'mobile'                  => $dto->mobile,
+                'date_of_birth'           => $dto->dateOfBirth,
+                'gender'                  => $dto->gender,
+                'civil_status'            => $civilStatus?->value ?? $dto->civilStatus,
+                'number_of_children'      => $dto->numberOfChildren,
+                'nationality'             => $dto->nationality,
 
                 // ── AIS / Trade Test ─────────────────────────────────────────
                 'applied_position'        => $dto->appliedPosition,
@@ -83,22 +83,22 @@ class CreateApplicantAction
                 'english_proficiency_pct' => $dto->englishProficiencyPct,
 
                 // ── Physical ─────────────────────────────────────────────────
-                'height_cm'          => $dto->heightCm,
-                'weight_kg'          => $dto->weightKg,
-                'dominant_hand'      => $dto->dominantHand,
-                'blood_type'         => $dto->bloodType,
+                'height_cm'               => $dto->heightCm,
+                'weight_kg'               => $dto->weightKg,
+                'dominant_hand'           => $dto->dominantHand,
+                'blood_type'              => $dto->bloodType,
 
                 // ── Address ──────────────────────────────────────────────────
-                'current_address'    => $dto->currentAddress,
-                'permanent_address'  => $dto->permanentAddress,
-                'city'               => $dto->city,
-                'province'           => $dto->province,
-                'postal_code'        => $dto->postalCode,
+                'current_address'         => $dto->currentAddress,
+                'permanent_address'       => $dto->permanentAddress,
+                'city'                    => $dto->city,
+                'province'                => $dto->province,
+                'postal_code'             => $dto->postalCode,
 
                 // ── Passport / IDs ───────────────────────────────────────────
                 'passport_number'            => $dto->passportNumber,
                 'passport_expiry'            => $dto->passportExpiry,
-                'passport_issuing_office_id' => $dto->passportIssuingOfficeId, // Mapped
+                'passport_issuing_office_id' => $dto->passportIssuingOfficeId,
                 'sss_number'                 => $dto->sssNumber,
                 'tin_number'                 => $dto->tinNumber,
                 'philhealth_number'          => $dto->philhealthNumber,
@@ -146,20 +146,30 @@ class CreateApplicantAction
                 // ── Meta & Assignment ────────────────────────────────────────
                 'assigned_staff_id' => $dto->assignedStaffId,
                 'created_by'        => $dto->createdBy,
-                'status' => $dto->status ?? 'pending',
+                'status'            => $dto->status ?? 'pending',
             ]);
 
-            // ── 3. Create Relational Family Record ───────────────────────────
+            // ── 3. Create Relational Family Record (Includes AIS Living Arrangement) ──
             $applicant->family()->create([
-                'spouse_name'        => $dto->spouseName,
-                'spouse_occupation'  => $dto->spouseOccupation,
-                'spouse_salary'      => $dto->spouseSalary,
-                'spouse_salary_unit' => $dto->spouseSalaryUnit ?? 'per_month',
-                'father_name'        => $dto->fatherName,
-                'mother_name'        => $dto->motherName,
+                'spouse_name'          => $dto->spouseName,
+                'spouse_occupation'    => $dto->spouseOccupation,
+                'spouse_salary'        => $dto->spouseSalary,
+                'spouse_salary_unit'   => $dto->spouseSalaryUnit ?? 'per_month',
+                'father_name'          => $dto->fatherName,
+                'mother_name'          => $dto->motherName,
+                'living_arrangement'   => $dto->livingArrangement ?? null,
+                'siblings_description' => $dto->siblingsDescription ?? null,
             ]);
 
-            // ── 4. Create Japan Contacts (if present) ────────────────────────
+            // ── 4. Create Lifestyle Record (Smoking & Alcohol for AIS) ────────
+            $applicant->lifestyle()->create([
+                'is_smoking'          => $dto->isSmoking ?? false,
+                'smoking_frequency'   => $dto->smokingFrequency ?? null,
+                'is_drinking_alcohol' => $dto->isDrinkingAlcohol ?? false,
+                'drinking_frequency'  => $dto->drinkingFrequency ?? null,
+            ]);
+
+            // ── 5. Create Japan Contacts (if present) ────────────────────────
             if (!empty($dto->japanContacts)) {
                 $applicant->japanContacts()->createMany($dto->japanContacts);
             }
@@ -173,7 +183,7 @@ class CreateApplicantAction
             return $applicant;
         });
 
-        // ── 5. Notifications (Dispatched after DB transaction) ───────────────
+        // ── 6. Notifications ─────────────────────────────────────────────
         $name = "{$applicant->first_name} {$applicant->last_name}";
         $code = $applicant->applicant_code;
 

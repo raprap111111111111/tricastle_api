@@ -65,7 +65,7 @@ class ApplicantResource extends JsonResource
             'company_category' => $this->company_category,
             'remarks'          => $this->remarks ?? [],
 
-            // ✅ Address fields — always present for Final List table columns
+            // Address fields
             'city'              => $this->city,
             'province'          => $this->province,
             'current_address'   => $this->current_address,
@@ -80,7 +80,6 @@ class ApplicantResource extends JsonResource
                     : \Carbon\Carbon::parse($this->passport_issue_date)->format('Y-m-d'))
                 : null,
 
-            // Lightweight office relation (keep as-is, still useful for labels)
             'passport_office' => $this->relationLoaded('passportOffice') && $this->passportOffice ? [
                 'id'      => $this->passportOffice->id,
                 'region'  => $this->passportOffice->region,
@@ -129,14 +128,18 @@ class ApplicantResource extends JsonResource
         // 🔍 FULL PROFILE FIELDS (Included ONLY on GET /applicants/{id})
         // ═════════════════════════════════════════════════════════════════
         if ($isDetailView) {
-            $family = $this->relationLoaded('family') ? $this->family : null;
+            $family = $this->relationLoaded('family') ? $this->family : ($this->family ?? null);
 
             $data = array_merge($data, [
                 'trade_test_try'          => $this->trade_test_try,
                 'trade_test_date'         => $this->trade_test_date?->format('Y-m-d'),
                 'birthplace'              => $this->birthplace,
                 'religion'                => $this->religion,
-                'english_proficiency_pct' => (int) ($this->english_proficiency_pct ?? 0),
+
+                // Fixed: Do NOT cast null to 0
+                'english_proficiency_pct' => $this->english_proficiency_pct !== null
+                    ? (int) $this->english_proficiency_pct
+                    : null,
 
                 'phone'              => $this->phone,
                 'mobile'             => $this->mobile,
@@ -150,9 +153,6 @@ class ApplicantResource extends JsonResource
                 'weight_kg'     => $this->weight_kg ? (float) $this->weight_kg : null,
                 'dominant_hand' => $this->dominant_hand,
                 'blood_type'    => $this->blood_type,
-
-                // address fields already in base — no need to repeat
-                // 'current_address', 'permanent_address', 'city', 'province', 'postal_code'
 
                 'passport_number'   => $this->passport_number,
                 'sss_number'        => $this->sss_number,
@@ -206,7 +206,7 @@ class ApplicantResource extends JsonResource
                         'occupation'  => $family?->spouse_occupation ?? $this->spouse_occupation,
                         'contact'     => $family?->spouse_contact ?? $this->spouse_contact,
                         'salary'      => $family?->spouse_salary !== null ? (float) $family->spouse_salary : null,
-                        'salary_unit' => $family?->spouse_salary_unit,
+                        'salary_unit' => $family?->spouse_salary_unit ?? 'per_month',
                     ],
                     'emergency_contact' => [
                         'name'         => $family?->emergency_contact_name ?? $this->emergency_contact_name,
@@ -214,7 +214,9 @@ class ApplicantResource extends JsonResource
                         'phone'        => $family?->emergency_contact_phone ?? $this->emergency_contact_phone,
                         'address'      => $family?->emergency_contact_address ?? $this->emergency_contact_address,
                     ],
-                    'living_situation'     => $family?->living_situation ?? $this->living_situation,
+                    // Fixed: Added living_arrangement & preserved backward compatibility
+                    'living_arrangement'   => $family?->living_arrangement ?? $family?->living_situation ?? $this->living_arrangement ?? null,
+                    'living_situation'     => $family?->living_arrangement ?? $family?->living_situation ?? null,
                     'birth_order'          => $family?->birth_order ?? $this->birth_order,
                     'siblings_count'       => $family?->siblings_count ?? $this->siblings_count,
                     'siblings_description' => $family?->siblings_description ?? $this->siblings_description,

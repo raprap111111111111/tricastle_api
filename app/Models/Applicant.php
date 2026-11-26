@@ -67,35 +67,35 @@ class Applicant extends Model
         'philhealth_number',
         'pagibig_number',
 
-        // ── Skill / Trade (Phase 1) ───────────────────────────────────────
+        // ── Skill / Trade ─────────────────────────────────────────────────
         'skill_category',
         'trade_or_occupation',
 
-        // ── Language (Phase 1) ────────────────────────────────────────────
+        // ── Language ──────────────────────────────────────────────────────
         'understands_basic_english',
         'jlpt_level',
 
-        // ── Japan Deployment Readiness (Phase 1) ──────────────────────────
+        // ── Japan Deployment Readiness ────────────────────────────────────
         'willing_to_be_deployed',
         'japan_deployment_ready',
         'preferred_work_location',
 
-        // ── Prior Japan Experience (Phase 1) ──────────────────────────────
+        // ── Prior Japan Experience ────────────────────────────────────────
         'previous_japan_experience',
         'years_japan_experience',
 
-        // ── TITP / SSW Certifications (Phase 1) ──────────────────────────
+        // ── TITP / SSW Certifications ────────────────────────────────────
         'has_titp_certificate',
         'titp_occupation',
         'ssw_eligible',
 
-        // ── Salary (Phase 1) ──────────────────────────────────────────────
+        // ── Salary ────────────────────────────────────────────────────────
         'expected_salary',
         'expected_salary_currency',
         'current_salary',
         'current_salary_currency',
 
-        // ── Family (Legacy / Phase 1) ─────────────────────────────────────
+        // ── Family (Legacy / Flat fields) ─────────────────────────────────
         'father_name',
         'father_occupation',
         'father_contact',
@@ -106,7 +106,7 @@ class Applicant extends Model
         'spouse_occupation',
         'spouse_contact',
 
-        // ── Emergency Contact (Phase 1) ───────────────────────────────────
+        // ── Emergency Contact ─────────────────────────────────────────────
         'emergency_contact_name',
         'emergency_contact_relationship',
         'emergency_contact_phone',
@@ -152,7 +152,7 @@ class Applicant extends Model
         'current_salary'          => 'decimal:2',
         'years_japan_experience'  => 'integer',
 
-        // ── Booleans (Phase 1) ────────────────────────────────────────────
+        // ── Booleans ──────────────────────────────────────────────────────
         'understands_basic_english'  => 'boolean',
         'willing_to_be_deployed'     => 'boolean',
         'japan_deployment_ready'     => 'boolean',
@@ -160,13 +160,18 @@ class Applicant extends Model
         'has_titp_certificate'       => 'boolean',
         'ssw_eligible'               => 'boolean',
 
-        // ── Enum ──────────────────────────────────────────────────────────
+        // ── Enum & JSON ───────────────────────────────────────────────────
         'status'       => ApplicantStatus::class,
         'civil_status' => CivilStatus::class,
-        'remarks' => 'array',
+        'remarks'      => 'array',
     ];
 
-    protected $appends = ['full_name', 'age', 'photo_url'];
+    protected $appends = [
+        'full_name',
+        'age',
+        'photo_url',
+        'registered_at',
+    ];
 
     // ═══════════════════════════════════════════════════════
     // Spatie Activity Log
@@ -220,12 +225,12 @@ class Applicant extends Model
 
         $lastCode = static::withTrashed()
             ->where('applicant_code', 'LIKE', $prefix . '%')
-            ->orderByRaw('CAST(SUBSTRING(applicant_code, 9) AS UNSIGNED) DESC')
+            ->orderByRaw('CAST(SUBSTRING(applicant_code, ' . (strlen($prefix) + 1) . ') AS UNSIGNED) DESC')
             ->value('applicant_code');
 
         $nextNumber = 1;
         if ($lastCode) {
-            $lastNumber = (int) substr($lastCode, 8);
+            $lastNumber = (int) substr($lastCode, strlen($prefix));
             $nextNumber = $lastNumber + 1;
         }
 
@@ -238,6 +243,10 @@ class Applicant extends Model
 
         return $code;
     }
+
+    // ═══════════════════════════════════════════════════════
+    // Accessors
+    // ═══════════════════════════════════════════════════════
 
     protected function fullName(): Attribute
     {
@@ -258,12 +267,24 @@ class Applicant extends Model
         );
     }
 
+    protected function registeredAt(): Attribute
+    {
+        return Attribute::make(
+            get: fn() => $this->created_at?->toISOString() ?? (string) $this->created_at,
+        );
+    }
+
     protected function photoUrl(): Attribute
     {
         return Attribute::make(
             get: function () {
+                // Safeguard against N+1 lazy loading
+                if (!$this->relationLoaded('currentDocuments')) {
+                    return null;
+                }
+
                 $idPhotoDoc = $this->currentDocuments
-                    ?->first(fn($doc) => $doc->documentType?->code === 'ID_PHOTO');
+                    ->first(fn($doc) => $doc->relationLoaded('documentType') && $doc->documentType?->code === 'ID_PHOTO');
 
                 if ($idPhotoDoc && $idPhotoDoc->file_path) {
                     return asset('storage/' . ltrim($idPhotoDoc->file_path, '/'));
@@ -354,11 +375,6 @@ class Applicant extends Model
         return $this->hasMany(ApplicantBatch::class);
     }
 
-    public function applicant_batches(): HasMany
-    {
-        return $this->applicantBatches();
-    }
-
     public function batches(): BelongsToMany
     {
         return $this->belongsToMany(Batch::class, 'applicant_batches')
@@ -381,84 +397,5 @@ class Applicant extends Model
     public function currentBatch(): HasOne
     {
         return $this->hasOne(ApplicantBatch::class)->latestOfMany('assigned_at');
-    }
-
-    public function getCurrentCompanyAttribute(): ?string
-    {
-        $ab = $this->relationLoaded('applicantBatches')
-            ? $this->applicantBatches->first()
-            : ($this->relationLoaded('currentBatch') && $this->currentBatch
-                ? $this->currentBatch
-                : $this->applicantBatches()->latest('assigned_at')->first());
-
-        if ($ab) {
-            if ($ab->batch?->company) {
-                return $ab->batch->company->name;
-            }
-
-            if (!empty($ab->deployment_company)) {
-                if (is_numeric($ab->deployment_company)) {
-                    $comp = Company::withTrashed()->find((int) $ab->deployment_company);
-                    if ($comp?->name) {
-                        return $comp->name;
-                    }
-                } else {
-                    return $ab->deployment_company;
-                }
-            }
-        }
-
-        $internship = $this->relationLoaded('internships')
-            ? $this->internships->first()
-            : $this->internships()->latest()->first();
-
-        if ($internship) {
-            $receiving = $internship->relationLoaded('receivingCompany') && $internship->receivingCompany
-                ? $internship->receivingCompany
-                : ($internship->receiving_company_id ? Company::withTrashed()->find($internship->receiving_company_id) : null);
-
-            if ($receiving?->name) {
-                return $receiving->name;
-            }
-        }
-
-        if (isset($ab) && !empty($ab->deployment_company)) {
-            return "Company #{$ab->deployment_company}";
-        }
-
-        return null;
-    }
-
-    public function getCompanyCategoryAttribute(): ?string
-    {
-        $ab = $this->relationLoaded('applicantBatches')
-            ? $this->applicantBatches->first()
-            : ($this->relationLoaded('currentBatch') && $this->currentBatch
-                ? $this->currentBatch
-                : $this->applicantBatches()->latest('assigned_at')->first());
-
-        $company = null;
-
-        if ($ab) {
-            if ($ab->batch?->company) {
-                $company = $ab->batch->company;
-            } elseif (!empty($ab->deployment_company) && is_numeric($ab->deployment_company)) {
-                $company = Company::withTrashed()->with('category')->find((int) $ab->deployment_company);
-            }
-        }
-
-        if (!$company) {
-            $internship = $this->relationLoaded('internships')
-                ? $this->internships->first()
-                : $this->internships()->latest()->first();
-
-            if ($internship) {
-                $company = $internship->relationLoaded('receivingCompany') && $internship->receivingCompany
-                    ? $internship->receivingCompany
-                    : ($internship->receiving_company_id ? Company::withTrashed()->with('category')->find($internship->receiving_company_id) : null);
-            }
-        }
-
-        return $company?->category?->name ?? $company?->companyCategory?->name ?? null;
     }
 }
